@@ -1,0 +1,21 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Launch CSIMS (Desktop App)",
+            "request": "launch",
+            "mainClass": "com.csims.Main",
+            "projectName": "construction-site-intelligence",
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "java",
+            "name": "Run CSIMS Tests",
+            "request": "launch",
+            "mainClass": "org.junit.platform.console.ConsoleLauncher",
+            "projectName": "construction-site-intelligence",
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

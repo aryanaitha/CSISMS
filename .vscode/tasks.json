@@ -1,0 +1,26 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Maven: Package Fat JAR",
+            "type": "shell",
+            "command": "C:\\Users\\Aryan\\tools\\apache-maven-3.9.6\\bin\\mvn.cmd clean package",
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "Maven: Run Unit Tests",
+            "type": "shell",
+            "command": "C:\\Users\\Aryan\\tools\\apache-maven-3.9.6\\bin\\mvn.cmd test",
+            "group": "test",
+            "problemMatcher": []
+        },
+        {
+            "label": "Run CSIMS Executable JAR",
+            "type": "shell",
+            "command": "& 'C:\\Program Files\\Eclipse Adoptium\\jdk-17.0.20.101-hotspot\\bin\\java.exe' -jar target/construction-site-intelligence-1.0.0-jar-with-dependencies.jar",
+            "group": "none",
+            "problemMatcher": []
+        }
+    ]
+}

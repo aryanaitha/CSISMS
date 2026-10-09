@@ -1,0 +1,8 @@
+com\csims\TaskWorkflowStateMachineTest.class
+com\csims\CsvExporterTest.class
+com\csims\SeedHashGenerator.class
+com\csims\PasswordSecurityTest.class
+com\csims\InventoryStockLogicTest.class
+com\csims\AuthLockoutLogicTest.class
+com\csims\RbacPermissionTest.class
+com\csims\ValidatorAndDateUtilTest.class
