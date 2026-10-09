@@ -1,241 +1,196 @@
 # Construction Site Intelligence & Safety Management System (CSIMS)
 
-A comprehensive, runnable desktop application for intelligent construction site operations and safety compliance management, built with pure **Java 17 (Swing)** on the frontend and **MySQL 8 via JDBC** on the backend.
+A modern, enterprise-grade full-stack web application for construction site intelligence, workforce coordination, equipment fleet management, material inventory, OSHA safety inspections, and incident tracking.
+
+Built with **React 18 + Vite** on the frontend, **Spring Boot 3 + Spring JdbcTemplate** (strictly NO JPA, NO Hibernate) on the backend, and **MySQL 8** with automated **Flyway** migrations.
 
 ---
 
-## 1. System Overview & Architecture
-
-CSIMS is designed for construction general contractors, safety officers, site engineers, and project stakeholders to oversee site workforce, machinery, material inventory, tasks, safety inspections, and regulatory compliance.
-
-### Architectural Principles
-- **No Heavy Frameworks**: Pure Java SE (Swing UI, Standard Library, JDBC). No Spring, No Hibernate.
-- **Layered Architecture**: `UI View / Dialogs` &rarr; `Service Layer` &rarr; `DAO Layer` &rarr; `Singleton DBConnection` &rarr; `MySQL 8`.
-- **Security First**: 
-  - PBKDF2 with HMAC-SHA256 password hashing (65,536 iterations, cryptographically random per-user salt, constant-time verification).
-  - Rate limiting & lockout: 5 consecutive failed login attempts locks account for 15 minutes (`users.locked_until`).
-  - Inactivity timeout: 15 minutes of user idle time across keyboard/mouse triggers automatic session termination.
-  - Strict RBAC: 8 granular roles, 46 system permissions enforced at both UI (component filtering) and Service Layer (`PermissionChecker.require(...)`).
-- **Data Integrity & Compliance**:
-  - ACID transactions with auto-commit disabled and explicit rollback on stock depletion.
-  - Append-only audit trail logging all state transitions, user logins, and entity changes with before/after diffs.
-  - Immutable incident compliance tracking.
+## 1. System Architecture & Tech Stack
 
 ```
-+-------------------------------------------------------------------------+
-|                              Java Swing UI                              |
-|  (LandingFrame, LoginFrame, MainFrame, 12 Modular Panels, Modal Dialogs)|
-+-------------------------------------------------------------------------+
-                                     |
-                                     v
-+-------------------------------------------------------------------------+
-|                              Service Layer                              |
-|  - RBAC Enforcement (PermissionChecker)                                |
-|  - Input Validation (Validator)                                         |
-|  - Audit Trail Generation (AuditService)                                |
-|  - Real-time Notifications (NotificationService)                       |
-|  - Business Workflows (State Machines & Inventory Transactions)         |
-+-------------------------------------------------------------------------+
-                                     |
-                                     v
-+-------------------------------------------------------------------------+
-|                                DAO Layer                                |
-|  - 19 Entity DAOs + JDBC Implementations                                |
-|  - Parameterized PreparedStatement Everywhere (No String Concatenation) |
-+-------------------------------------------------------------------------+
-                                     |
-                                     v
-+-------------------------------------------------------------------------+
-|                    Database Utility (DBConnection)                      |
-|  - Thread-Safe Singleton with db.properties connection pooling check    |
-+-------------------------------------------------------------------------+
-                                     |
-                                     v
-+-------------------------------------------------------------------------+
-|                         MySQL 8 Relational DB                           |
-|  - 20 Relational Tables, Constraints, Indexes, Foreign Keys             |
-+-------------------------------------------------------------------------+
++---------------------------------------------------------------------------------------+
+|                                    React 18 Frontend                                  |
+|   - Vite Build Tooling, React Router v6, Plain CSS (Design System Variables)          |
+|   - Fetch API Client (api.js with Cookie Credentials)                                 |
+|   - AuthContext + useIdleTimer (15-min auto session timeout) + usePermission (RBAC)   |
+|   - Pages: Landing, Login, Dashboard, Projects, Workforce, Tasks, Attendance,        |
+|            Inventory, Equipment, Maintenance, Safety, Incidents, Reports, Users,      |
+|            Role Matrix, Account Requests, Audit Trail                                 |
++---------------------------------------------------------------------------------------+
+                                           |
+                              HTTP / REST (/api/*) & SPA Routing
+                                           |
++---------------------------------------------------------------------------------------+
+|                               Spring Boot 3.3.4 Backend                               |
+|   - Web MVC + Spring Security (Session Cookie JSESSIONID, HttpOnly, SameSite=Strict)  |
+|   - Method-level Server RBAC: @PreAuthorize backed by database permissions            |
+|   - Password Security: BCryptPasswordEncoder (cost 10)                                |
+|   - Lockout & Audit: 5 failed attempts = 15m lockout; append-only audit trail         |
+|   - REST Controllers -> Services -> Repositories -> Spring JdbcTemplate               |
+|   - Transaction Management (@Transactional rollback on stock depletion)              |
+|   - OpenAPI / Swagger UI: /swagger-ui.html                                            |
++---------------------------------------------------------------------------------------+
+                                           |
+                               Spring JdbcTemplate (HikariCP)
+                                           |
++---------------------------------------------------------------------------------------+
+|                                MySQL 8 Relational DB                                  |
+|   - 20 Relational Tables, Indexes, Constraints                                        |
+|   - Flyway Versioned Migrations: V1__schema.sql & V2__seed.sql                        |
++---------------------------------------------------------------------------------------+
 ```
+
+### Key Architectural Standards
+1. **Strictly NO JPA / Hibernate**: Data access uses Spring `JdbcTemplate` with parameterized PreparedStatement binding (`?`) preserving clean DAO/Repository boundaries.
+2. **Method-Level Server RBAC**: Every endpoint enforces permissions (e.g. `@PreAuthorize("hasAuthority('PROJECT_CREATE')")`).
+3. **Session Cookie Security**: Uses `JSESSIONID` cookies with `changeSessionId()` session fixation protection, `HttpOnly`, and `SameSite=Strict`.
+4. **Resilient SPA Serving**: Spring Boot serves the precompiled React single-page application at `/` and forwards client-side HTML5 routes to `/index.html`.
 
 ---
 
-## 2. Seeded Demo Accounts & Role Matrix
+## 2. Seeded Demo Accounts & Credentials
 
-The system comes pre-configured in [seed.sql](file:///c:/Users/Aryan/Desktop/construction-site-intelligence/seed.sql) with 8 roles, 46 granular permissions, and 9 test accounts.
+The database is pre-seeded with 8 roles, 46 permissions, and test accounts:
 
-| Username | Password | Role | Description & Primary Access |
+| Username | Password | Role | Responsibilities & Primary Modules |
 | :--- | :--- | :--- | :--- |
-| **`admin`** | `Admin@1234` | Administrator | Full unrestricted system access, User CRUD, Role-Permission Matrix, Audit Trail viewer. |
-| **`pm_sarah`** | `Pm@12345` | Project Manager | Project CRUD, Budget tracking, Task assignments, Milestone progress, Workforce allocation. |
-| **`site_eng`** | `Eng@12345` | Site Engineer | Task workflow updates, Attendance logging & corrections, Equipment assignment, Daily logs. |
-| **`safety_dan`** | `Safe@12345` | Safety Officer | Safety Inspections, Violation logging & resolution, Incident investigations, OSHA metrics. |
-| **`inv_maria`** | `Inv@12345` | Inventory Manager | Material stock tracking, Issue/Receipt transactions, Low-stock alerts, Reorder levels. |
-| **`equip_sam`** | `Equip@12345` | Equipment Manager | Heavy machinery fleet, Equipment checkout, Scheduled maintenance workflows. |
-| **`contractor_apex`** | `Cont@12345` | Contractor | Subcontractor workforce overview, Assigned subcontract tasks. |
-| **`worker_bill`** | `Worker@12345` | Worker | Personal assigned task execution, Personal monthly attendance log. |
-| **`reset_test`** | `Reset@12345` | Site Engineer | Special test account with `must_change_password = true` to verify forced password change. |
+| **`admin`** | `Admin@123` | Administrator | Full unrestricted access, User CRUD, Role Matrix, Audit Logs |
+| **`pm_sarah`** | `Pm@12345` | Project Manager | Projects, Budgets, Workforce assignments, Task milestones |
+| **`site_eng`** | `Eng@12345` | Site Engineer | Tasks execution, Daily workforce attendance, Material requests |
+| **`safety_dan`** | `Safe@12345` | Safety Officer | Safety inspections (5-score checklist), Violations, Incidents |
+| **`inv_maria`** | `Inv@12345` | Inventory Manager | Material catalog, Stock receipts & issues, Low-stock alerts |
+| **`equip_sam`** | `Equip@12345` | Equipment Manager | Machinery catalog, Preventative maintenance scheduling |
+| **`contractor_apex`** | `Cont@12345` | Contractor | Subcontractor workforce overview, Assigned subcontract tasks |
+| **`worker_bill`** | `Worker@12345` | Worker | Assigned task execution, Personal monthly attendance log |
+| **`reset_test`** | `Reset@12345` | Site Engineer | Demo account with `must_change_password = true` |
 
-*Note: All passwords meet the security policy (8+ characters, letters, and numbers).*
-
----
-
-## 3. Database Setup Instructions
-
-### Prerequisites
-- MySQL 8.0+ server installed and running.
-- MySQL client or command-line utility.
-
-### Step 1: Initialize Database & Schema
-Open a terminal or MySQL workbench and execute the schema script:
-```sql
-mysql -u root -p < schema.sql
-```
-*(Alternatively, copy and run the contents of [schema.sql](file:///c:/Users/Aryan/Desktop/construction-site-intelligence/schema.sql) in your MySQL console).*
-
-### Step 2: Seed Initial Roles, Permissions & Demo Data
-Execute the seed script:
-```sql
-mysql -u root -p < seed.sql
-```
-*(Runs [seed.sql](file:///c:/Users/Aryan/Desktop/construction-site-intelligence/seed.sql) which populates roles, permissions, 9 hashed users with salts, projects, inventory materials, equipment, and audit logs).*
-
-### Step 3: Configure Database Connection
-Edit [src/main/resources/db.properties](file:///c:/Users/Aryan/Desktop/construction-site-intelligence/src/main/resources/db.properties):
-```properties
-db.url=jdbc:mysql://localhost:3306/construction_site_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
-db.user=root
-db.password=your_mysql_password
-```
+*Security Policy: Minimum 8 characters, at least one letter and one number.*
 
 ---
 
-## 4. Build & Execution
+## 3. Database Setup
 
-### Prerequisites
-- **Java 17+** (JDK 17 LTS recommended)
-- **Maven 3.8+**
-
-### 1. Compile & Run Automated Unit Tests
+### Option 1: Using Docker (Recommended for instant setup)
+Start a MySQL 8 container with volume and health check:
 ```bash
+docker compose up -d
+```
+The database will be automatically available at `localhost:3306` with database `csims_db`, user `root`, and password `Aryan@2007`. Flyway will run schema migrations on backend launch.
+
+### Option 2: Using Local MySQL Server
+Ensure MySQL 8.x is installed and running locally on port 3306.
+Create the database in MySQL:
+```sql
+CREATE DATABASE IF NOT EXISTS csims_db;
+```
+If your MySQL credentials differ, set environment variables or edit `backend/src/main/resources/application.properties`:
+- `DB_URL` (default: `jdbc:mysql://localhost:3306/csims_db`)
+- `DB_USER` (default: `root`)
+- `DB_PASSWORD` (default: `Aryan@2007`)
+- `SERVER_PORT` (default: `8080`)
+
+---
+
+## 4. How to Run the Application
+
+### Option A: Development Mode (Vite Dev Server + Spring Boot API)
+Run the backend and frontend concurrently for hot module replacement (HMR).
+
+**Terminal 1 — Backend:**
+```bash
+cd backend
+mvn spring-boot:run
+```
+Backend API will be available at: **http://localhost:8080**
+
+**Terminal 2 — Frontend:**
+```bash
+cd frontend
+npm install
+npm run dev
+```
+Frontend UI will be live at: **http://localhost:5173**  
+*(Vite proxies all `/api` calls directly to `http://localhost:8080`)*
+
+---
+
+### Option B: Single-Command Production Deployment (Self-Contained JAR)
+Build the frontend, bundle static assets into the Spring Boot JAR, and run everything on a single port:
+
+**Step 1: Build Frontend Assets**
+```bash
+cd frontend
+npm install
+npm run build
+```
+*(Build output compiles into `backend/src/main/resources/static/`)*
+
+**Step 2: Package Backend JAR**
+```bash
+cd ../backend
+mvn clean package -DskipTests
+```
+
+**Step 3: Run Single JAR**
+```bash
+java -jar target/csims.jar
+```
+Open your browser at: **http://localhost:8080**  
+The full application (React UI + REST API + Static Assets) will be served directly at `http://localhost:8080`.
+
+---
+
+## 5. API Documentation & OpenAPI Swagger
+
+When the backend is running, explore interactive API documentation with Swagger UI:
+- **Swagger UI**: [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
+- **OpenAPI JSON**: [http://localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs)
+
+---
+
+## 6. Automated Integration Tests
+
+Run the complete JUnit 5 + Spring Boot Test suite:
+```bash
+cd backend
 mvn test
 ```
-*Executes all 19 unit tests covering password security, lockout rate limiting, RBAC enforcement, task state machine, inventory stock deduction rules, validation, and CSV export.*
-
-### 2. Build Fat JAR (Executable with All Dependencies)
-```bash
-mvn clean package
-```
-This produces the standalone JAR file:
-```
-target/construction-site-intelligence-1.0.0-jar-with-dependencies.jar
-```
-
-### 3. Launch the Application
-```bash
-java -jar target/construction-site-intelligence-1.0.0-jar-with-dependencies.jar
-```
+The test suite covers:
+1. **`AuthIntegrationTest`**: Unauthenticated 401 challenge, successful credential authentication, invalid password rejection, and session validation.
+2. **`RbacIntegrationTest`**: Method security `@PreAuthorize` verification, allowing permitted actions while returning 403 Forbidden for unauthorized roles.
+3. **`InventoryTransactionTest`**: Atomic transaction validation, verifying automatic `@Transactional` rollback when requested issue quantity exceeds available stock.
 
 ---
 
-## 5. System Features & Module Walkthrough
+## 7. Core Modules & Features
 
-### 1. Landing Screen & Health Check
-- Displays application banner and description.
-- Performs an instantaneous live database ping to MySQL on startup.
-- If MySQL is offline, the **Login** button is gracefully disabled with a clear diagnostic notice.
-- Includes **Request Access** dialog for new user registrations without requiring pre-existing credentials.
-
-### 2. Authentication & Account Security
-- **PBKDF2 Password Hashing**: Passwords stored as 256-bit PBKDF2 hashes using HMAC-SHA256 with individual 128-bit cryptographic salts.
-- **Account Lockout**: 5 failed login attempts locks the account for 15 minutes, with remaining lockout minutes rendered in the UI.
-- **Forced Password Change**: Users flagged with `must_change_password` (e.g. `reset_test`) are blocked from proceeding until a compliant new password is set.
-- **Remember Username**: Persists username via `java.util.prefs.Preferences`.
-- **Idle Timeout**: Automatically monitors global mouse and keyboard events; logs out the user after 15 minutes of inactivity.
-
-### 3. Role-Based Access Control (RBAC)
-- Sidebar navigation dynamically filters module buttons based on the user's role and granted permission codes.
-- Administrator has access to the full **User Management** panel, enabling:
-  - User creation, deactivation, and manual unlocking.
-  - Interactive **Role-Permissions Matrix** to grant or revoke specific module permissions.
-  - Review and approval/rejection of self-service account requests.
-
-### 4. Projects & Milestones
-- Complete CRUD management for construction projects.
-- Tracks project code, name, client, location, budget, start/end dates, status, and completion progress.
-
-### 5. Workforce & Subcontractor Directory
-- Worker directory filtered by trade (Carpentry, Electrical, Masonry, Plumbing, etc.).
-- Subcontractor tracking and association.
-- Project assignment modal.
-
-### 6. Tasks Workflow State Machine
-- Strict 4-stage task lifecycle:
-  $$\text{Created} \longrightarrow \text{Assigned} \longrightarrow \text{In Progress} \longrightarrow \text{Completed}$$
-- Enforces worker assignment before task transition to "In Progress".
-- Overdue task identification and priority categorization.
-
-### 7. Worker Attendance & Audit Corrections
-- Daily clock-in/clock-out tracking with overtime calculation.
-- Attendance correction dialog with required justification note and automatic before/after audit logging.
-
-### 8. Material Inventory & ACID Transactions
-- Real-time stock tracking with category, unit, unit price, and reorder levels.
-- Stock issue transactions run with `setAutoCommit(false)`:
-  - If requested quantity exceeds on-hand stock, the transaction throws a validation exception and rolls back immediately.
-  - On success, stock is deducted, movement is logged, and low-stock notifications are dispatched if stock drops below threshold.
-
-### 9. Equipment & Maintenance Lifecycle
-- Fleet asset tracking (Excavators, Cranes, Bulldozers, Concrete Mixers, Generators).
-- 4-stage maintenance lifecycle:
-  $$\text{Due} \longrightarrow \text{Scheduled} \longrightarrow \text{Serviced} \longrightarrow \text{Completed}$$
-- Completing a maintenance task automatically updates equipment service dates and resets equipment status to "Available".
-
-### 10. Safety Inspections, Violations & Incidents
-- Safety inspections with numerical scoring (0-100), inspector notes, and pass/fail rating.
-- Violation logging with severity ratings (Low, Medium, High, Critical) and corrective action tracking.
-- Immutable incident investigation workflow (`Reported` &rarr; `Under Investigation` &rarr; `Action Taken` &rarr; `Resolved`).
-
-### 11. Role-Specific KPI Dashboards
-- Tailored KPI metric cards dynamically customized to the active role:
-  - **Administrator / PM**: Total Projects, Active Projects, Workforce Size, Overdue Tasks, Low Stock Items.
-  - **Safety Officer**: Avg Safety Score, Open Violations, Critical Violations, Total Inspections, Total Incidents.
-  - **Inventory Manager**: Material SKUs, Low-Stock Count, Inventory Valuation ($), Healthy Items.
-  - **Worker**: My Assigned Tasks, In-Progress, Completed, Overdue Tasks.
-- Live active tasks and recent system alerts tables.
-
-### 12. Reports & RFC-4180 CSV Export
-- Generates 7 distinct operational reports:
-  1. Project Summary Report
-  2. Workforce & Personnel Report
-  3. Task Execution & Progress Report
-  4. Inventory & Stock Valuation Report
-  5. Equipment & Fleet Status Report
-  6. Safety Violations & Incidents Report
-  7. System Audit Trail Report
-- Preview in table with a single-click **Export to CSV** file chooser.
-
-### 13. System Audit Trail
-- Strictly read-only and append-only (no update or delete capabilities).
-- Captures User, Action, Module, Entity ID, Status, Timestamp, and before/after JSON diffs.
-- Interactive **View Diffs / Details** dialog and CSV export.
-
----
-
-## 6. Verification & Automated Test Summary
-
-The automated test suite verifies all critical business logic and security requirements:
-
-| Test Class | Coverage Area | Status |
-| :--- | :--- | :---: |
-| [`PasswordSecurityTest`](file:///c:/Users/Aryan/Desktop/construction-site-intelligence/src/test/java/com/csims/PasswordSecurityTest.java) | PBKDF2 hashing, unique salts, constant-time verification, policy enforcement | **PASSED** |
-| [`AuthLockoutLogicTest`](file:///c:/Users/Aryan/Desktop/construction-site-intelligence/src/test/java/com/csims/AuthLockoutLogicTest.java) | 5 failed attempts lockout, 15-minute timer, administrator unlock | **PASSED** |
-| [`RbacPermissionTest`](file:///c:/Users/Aryan/Desktop/construction-site-intelligence/src/test/java/com/csims/RbacPermissionTest.java) | Session permission caching, UnauthorizedException on denial, Admin bypass | **PASSED** |
-| [`TaskWorkflowStateMachineTest`](file:///c:/Users/Aryan/Desktop/construction-site-intelligence/src/test/java/com/csims/TaskWorkflowStateMachineTest.java) | Created &rarr; Assigned &rarr; In Progress &rarr; Completed, invalid jumps rejected | **PASSED** |
-| [`InventoryStockLogicTest`](file:///c:/Users/Aryan/Desktop/construction-site-intelligence/src/test/java/com/csims/InventoryStockLogicTest.java) | Rollback on insufficient stock, stock deduction, low-stock threshold | **PASSED** |
-| [`ValidatorAndDateUtilTest`](file:///c:/Users/Aryan/Desktop/construction-site-intelligence/src/test/java/com/csims/ValidatorAndDateUtilTest.java) | Email, positive number, range validation, date formatting & parsing | **PASSED** |
-| [`CsvExporterTest`](file:///c:/Users/Aryan/Desktop/construction-site-intelligence/src/test/java/com/csims/CsvExporterTest.java) | RFC-4180 CSV compliance, comma/quote/newline escaping, null safety | **PASSED** |
-
----
-
-## 7. License & Compliance
-This software was engineered as a robust, production-grade mini project demonstrating secure Java desktop software architecture, clean separation of concerns, and enterprise security patterns.
+1. **Authentication & Session Security**:
+   - Generic "Invalid username or password" messages to prevent account enumeration.
+   - 5 consecutive failed attempts locks user account for 15 minutes.
+   - Forced password change on first login (`must_change_password`).
+   - 15-minute idle inactivity auto-logout (`useIdleTimer`).
+   - Public account access requests and password reset workflows.
+2. **User & Role Matrix Management**:
+   - Full CRUD for users with instant status toggle (Active/Inactive).
+   - Dynamic permission matrix editor for all 8 roles across 46 permissions.
+   - Approval/rejection review workflow for registration requests.
+3. **Core Construction Operations**:
+   - **Projects**: Budgets, milestone dates, progress tracking, and status transitions.
+   - **Workforce**: Tradesmen directory, contractor assignments, contact information.
+   - **Tasks**: Priority breakdown, worker assignments, due dates, completion percentages.
+   - **Attendance**: Daily site check-in, presence recording, supervisory remarks.
+4. **Inventory & Machinery Management**:
+   - **Materials**: Reorder thresholds, low stock alerts, atomic receipts and project issues.
+   - **Equipment**: Heavy machinery inventory, operational statuses.
+   - **Maintenance**: Preventative service logging, automatic next service due calculation.
+5. **Safety Compliance & Incidents**:
+   - **Inspections**: 5-category scoring checklist (PPE, Worker Safety, Equipment, Housekeeping, Emergency). Automatic alert when score < 70%.
+   - **Violations**: Hazard tracking with severity ratings (Critical, Major, Medium, Minor) and corrective action resolution.
+   - **Incidents**: Accident reporting (Fatality, Injury, Property Damage, Near Miss) with emergency broadcast alerts and root cause investigation workflows.
+6. **Intelligence & Reports Engine**:
+   - Real-time tabular reports across all operational modules.
+   - Live data preview tables with record counts.
+   - One-click RFC-4180 compliant CSV exports with proper escaping of quotes, commas, and newlines.
+7. **Immutable Audit Trail**:
+   - Append-only compliance log capturing user ID, username, IP/session, action, module, entity ID, previous/new values, timestamp, and status.
