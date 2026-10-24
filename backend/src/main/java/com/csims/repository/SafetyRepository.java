@@ -1,8 +1,8 @@
 package com.csims.repository;
 
-import com.csims.model.Incident;
-import com.csims.model.SafetyInspection;
-import com.csims.model.SafetyViolation;
+import com.csims.model.Models.Incident;
+import com.csims.model.Models.SafetyInspection;
+import com.csims.model.Models.SafetyViolation;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;

@@ -1,7 +1,6 @@
 package com.csims.security;
 
-import com.csims.model.User;
-import com.csims.repository.RoleRepository;
+import com.csims.model.Models.User;
 import com.csims.repository.UserRepository;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -13,11 +12,9 @@ import java.util.Set;
 @Service
 public class CustomUserDetailsService implements UserDetailsService {
     private final UserRepository userRepository;
-    private final RoleRepository roleRepository;
 
-    public CustomUserDetailsService(UserRepository userRepository, RoleRepository roleRepository) {
+    public CustomUserDetailsService(UserRepository userRepository) {
         this.userRepository = userRepository;
-        this.roleRepository = roleRepository;
     }
 
     @Override
@@ -25,7 +22,7 @@ public class CustomUserDetailsService implements UserDetailsService {
         User user = userRepository.findByUsernameOrEmail(usernameOrEmail)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + usernameOrEmail));
 
-        Set<String> permissions = roleRepository.findPermissionNamesByRoleId(user.getRoleId());
+        Set<String> permissions = userRepository.findPermissionNamesByRoleId(user.getRoleId());
         return new CustomUserDetails(user, permissions);
     }
 }

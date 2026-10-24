@@ -1,6 +1,6 @@
 package com.csims.security;
 
-import com.csims.model.User;
+import com.csims.model.Models.User;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;

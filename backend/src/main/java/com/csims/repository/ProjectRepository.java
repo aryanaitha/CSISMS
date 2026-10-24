@@ -1,11 +1,11 @@
 package com.csims.repository;
 
-import com.csims.model.Attendance;
-import com.csims.model.Contractor;
-import com.csims.model.Project;
-import com.csims.model.ProjectWorker;
-import com.csims.model.Task;
-import com.csims.model.Worker;
+import com.csims.model.Models.Attendance;
+import com.csims.model.Models.Contractor;
+import com.csims.model.Models.Project;
+import com.csims.model.Models.ProjectWorker;
+import com.csims.model.Models.Task;
+import com.csims.model.Models.Worker;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;

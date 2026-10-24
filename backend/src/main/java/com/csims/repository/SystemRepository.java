@@ -1,7 +1,7 @@
 package com.csims.repository;
 
-import com.csims.model.AuditLog;
-import com.csims.model.Notification;
+import com.csims.model.Models.AuditLog;
+import com.csims.model.Models.Notification;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;

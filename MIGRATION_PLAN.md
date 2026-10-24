@@ -259,3 +259,28 @@ All endpoints return a standardized envelope:
 - **Phase 6**: Safety Inspections, Violations & Incidents (OSHA metrics, resolution workflows, immutable incident tracking).
 - **Phase 7**: Dashboards, Notifications, Reports/CSV & Audit Log (Role KPI cards, polling alerts, RFC-4180 CSV export, read-only audit log).
 - **Phase 8**: Verification, automated tests, Swing code cleanup, docker-compose, and polished README.
+
+
+---
+
+## 7. Backend Architecture Consolidation (Refactoring Summary)
+
+To maintain clarity and accessibility for code walkthroughs and academic presentations, the backend was consolidated from 84 individual files into 27 structured, high-cohesion files while maintaining 100% API compatibility, database schema invariants, and zero changes to the React frontend.
+
+### 7.1 Before vs. After Mapping Table
+
+| Layer / Responsibility | Before (~84 files) | After (27 files) |
+| :--- | :--- | :--- |
+| **Controllers** | 19 separate controllers (`UserController`, `TaskController`, `MaterialController`, `HealthController`, etc.) | **6 consolidated controllers**: `AuthController`, `AdminController`, `ProjectController`, `InventoryController`, `SafetyController`, `ReportController` |
+| **Services** | 15 separate services (`UserService`, `RoleService`, `WorkforceService`, `IncidentService`, etc.) | **6 consolidated services**: `AuthService`, `AdminService`, `ProjectService`, `InventoryService`, `SafetyService`, `SystemService` |
+| **Repositories** | 12 separate repositories (`TaskRepository`, `MaterialRepository`, `IncidentRepository`, etc.) | **5 consolidated repositories**: `UserRepository`, `ProjectRepository`, `InventoryRepository`, `SafetyRepository`, `SystemRepository` |
+| **Models** | 19 individual entity files | **1 file**: `model/Models.java` (all 19 entities as clean static nested classes) |
+| **DTOs** | 7 request/response DTO files | **2 files**: `dto/Dtos.java` + `dto/ApiResponse.java` |
+| **Exceptions** | Multiple exception files + handler | **2 files**: `exception/AppExceptions.java` + `exception/GlobalExceptionHandler.java` |
+| **Security & Config** | `SecurityConfig.java` + `WebConfig.java` | **1 file**: `config/SecurityConfig.java` (includes WebMvcConfigurer, CORS, and SPA routing) |
+| **Utilities** | `CsvExportUtil.java` | **1 file**: `util/Utils.java` |
+
+### 7.2 Verification Invariants
+- **API Spec Preservation**: `/v3/api-docs` baseline before and after refactoring confirmed identical endpoint paths (60 paths), HTTP methods, parameters, and response schemas.
+- **Automated Tests**: 100% test pass rate across `AuthIntegrationTest`, `RbacIntegrationTest`, `InventoryTransactionTest`, and `BCryptGeneratorTest` (22/22 tests passing).
+- **Zero Frontend Impact**: No changes required to any React component or the `api.js` client wrapper.

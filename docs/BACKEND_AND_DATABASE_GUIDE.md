@@ -41,9 +41,9 @@ Let's trace what actually happens when you issue material on the site:
      "remarks": "Cement for slab casting"
    }
    ```
-2. **Controller** (`MaterialController.java`):
+2. **Controller** (`InventoryController.java`):
    ```java
-   @PostMapping("/issue")
+   @PostMapping("/api/inventory/issue")
    @PreAuthorize("hasAuthority('INVENTORY_ISSUE')")
    public ResponseEntity<ApiResponse<Void>> issueMaterial(@RequestBody StockMovementDto req,
                                                            @AuthenticationPrincipal CustomUserDetails user) {
@@ -96,7 +96,7 @@ Think of a backend project like an organized office department:
 | :--- | :--- | :--- |
 | **Entity / Model** | The Java representation of a database row (data holder with getters/setters). | `com.csims.model.Material`, `Project`, `Task` |
 | **DTO (Data Transfer Object)** | Custom object designed purely to receive data from or send data to the frontend. | `com.csims.dto.LoginRequest`, `StockMovementDto` |
-| **Controller** | The receptionist who listens for requests at the door (URLs) and replies with JSON. | `com.csims.controller.MaterialController` |
+| **Controller** | The receptionist who listens for requests at the door (URLs) and replies with JSON. | `com.csims.controller.InventoryController` |
 | **Service** | The manager who makes decisions, verifies business rules, and starts transactions. | `com.csims.service.InventoryService` |
 | **Repository (DAO)** | The filing clerk who knows the exact SQL statements to read/write records. | `com.csims.repository.MaterialRepository` |
 

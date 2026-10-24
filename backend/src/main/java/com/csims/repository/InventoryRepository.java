@@ -1,9 +1,9 @@
 package com.csims.repository;
 
-import com.csims.model.Equipment;
-import com.csims.model.InventoryTransaction;
-import com.csims.model.MaintenanceRecord;
-import com.csims.model.Material;
+import com.csims.model.Models.Equipment;
+import com.csims.model.Models.InventoryTransaction;
+import com.csims.model.Models.MaintenanceRecord;
+import com.csims.model.Models.Material;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;

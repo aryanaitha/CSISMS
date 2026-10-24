@@ -1,11 +1,10 @@
 package com.csims.service;
 
-import com.csims.dto.*;
-import com.csims.exception.ApiException;
-import com.csims.model.AccountRequest;
-import com.csims.model.User;
-import com.csims.repository.AccountRequestRepository;
-import com.csims.repository.RoleRepository;
+import com.csims.dto.Dtos.*;
+import com.csims.dto.ApiResponse;
+import com.csims.exception.AppExceptions.ApiException;
+import com.csims.model.Models.AccountRequest;
+import com.csims.model.Models.User;
 import com.csims.repository.UserRepository;
 import com.csims.security.CustomUserDetails;
 import jakarta.servlet.http.HttpServletRequest;
@@ -31,23 +30,17 @@ import java.util.regex.Pattern;
 @Service
 public class AuthService {
     private final UserRepository userRepository;
-    private final RoleRepository roleRepository;
-    private final AccountRequestRepository accountRequestRepository;
-    private final AuditService auditService;
+    private final SystemService systemService;
     private final PasswordEncoder passwordEncoder;
 
     private static final Pattern LETTER_PATTERN = Pattern.compile(".*[a-zA-Z].*");
     private static final Pattern DIGIT_PATTERN = Pattern.compile(".*[0-9].*");
 
     public AuthService(UserRepository userRepository,
-                       RoleRepository roleRepository,
-                       AccountRequestRepository accountRequestRepository,
-                       AuditService auditService,
+                       SystemService systemService,
                        PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
-        this.roleRepository = roleRepository;
-        this.accountRequestRepository = accountRequestRepository;
-        this.auditService = auditService;
+        this.systemService = systemService;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -55,20 +48,20 @@ public class AuthService {
         Optional<User> userOpt = userRepository.findByUsernameOrEmail(req.getUsername());
 
         if (userOpt.isEmpty()) {
-            auditService.log(null, req.getUsername(), null, "LOGIN_FAILED", "AUTH", "USER", null, null, null, "FAILURE", "User not found");
+            systemService.log(null, req.getUsername(), null, "LOGIN_FAILED", "AUTH", "USER", null, null, null, "FAILURE", "User not found");
             throw new BadCredentialsException("Invalid username or password");
         }
 
         User user = userOpt.get();
 
         if (!user.isActive()) {
-            auditService.log(user.getId(), user.getUsername(), user.getRoleName(), "LOGIN_FAILED", "AUTH", "USER", String.valueOf(user.getId()), null, null, "FAILURE", "Account deactivated");
+            systemService.log(user.getId(), user.getUsername(), user.getRoleName(), "LOGIN_FAILED", "AUTH", "USER", String.valueOf(user.getId()), null, null, "FAILURE", "Account deactivated");
             throw new DisabledException("Account is deactivated. Please contact an administrator.");
         }
 
         if (user.getLockedUntil() != null && LocalDateTime.now().isBefore(user.getLockedUntil())) {
             long remainingMins = Duration.between(LocalDateTime.now(), user.getLockedUntil()).toMinutes() + 1;
-            auditService.log(user.getId(), user.getUsername(), user.getRoleName(), "LOGIN_FAILED", "AUTH", "USER", String.valueOf(user.getId()), null, null, "FAILURE", "Attempt while locked");
+            systemService.log(user.getId(), user.getUsername(), user.getRoleName(), "LOGIN_FAILED", "AUTH", "USER", String.valueOf(user.getId()), null, null, "FAILURE", "Attempt while locked");
             throw new LockedException("Account is temporarily locked. Try again in " + remainingMins + " minute(s).");
         }
 
@@ -79,10 +72,10 @@ public class AuthService {
             if (newAttempts >= 5) {
                 LocalDateTime lockTime = LocalDateTime.now().plusMinutes(15);
                 userRepository.lockAccount(user.getId(), lockTime);
-                auditService.log(user.getId(), user.getUsername(), user.getRoleName(), "ACCOUNT_LOCKOUT", "AUTH", "USER", String.valueOf(user.getId()), null, null, "SUCCESS", "Account locked for 15 minutes after 5 failed attempts");
+                systemService.log(user.getId(), user.getUsername(), user.getRoleName(), "ACCOUNT_LOCKOUT", "AUTH", "USER", String.valueOf(user.getId()), null, null, "SUCCESS", "Account locked for 15 minutes after 5 failed attempts");
                 throw new LockedException("Account locked for 15 minutes due to 5 consecutive failed login attempts.");
             } else {
-                auditService.log(user.getId(), user.getUsername(), user.getRoleName(), "LOGIN_FAILED", "AUTH", "USER", String.valueOf(user.getId()), null, null, "FAILURE", "Incorrect password (attempt " + newAttempts + "/5)");
+                systemService.log(user.getId(), user.getUsername(), user.getRoleName(), "LOGIN_FAILED", "AUTH", "USER", String.valueOf(user.getId()), null, null, "FAILURE", "Incorrect password (attempt " + newAttempts + "/5)");
                 throw new BadCredentialsException("Invalid username or password");
             }
         }
@@ -91,7 +84,7 @@ public class AuthService {
         userRepository.resetFailedLoginsAndLock(user.getId());
         userRepository.updateLastLogin(user.getId());
 
-        Set<String> permissions = roleRepository.findPermissionNamesByRoleId(user.getRoleId());
+        Set<String> permissions = userRepository.findPermissionNamesByRoleId(user.getRoleId());
         CustomUserDetails userDetails = new CustomUserDetails(user, permissions);
 
         Authentication auth = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
@@ -100,7 +93,7 @@ public class AuthService {
         HttpSession session = request.getSession(true);
         session.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, SecurityContextHolder.getContext());
 
-        auditService.log(user.getId(), user.getUsername(), user.getRoleName(), "LOGIN_SUCCESS", "AUTH", "USER", String.valueOf(user.getId()), null, null, "SUCCESS", "User logged in successfully");
+        systemService.log(user.getId(), user.getUsername(), user.getRoleName(), "LOGIN_SUCCESS", "AUTH", "USER", String.valueOf(user.getId()), null, null, "SUCCESS", "User logged in successfully");
 
         return toDto(user, permissions);
     }
@@ -108,7 +101,7 @@ public class AuthService {
     public void logout(HttpServletRequest request) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.getPrincipal() instanceof CustomUserDetails userDetails) {
-            auditService.log(userDetails.getId(), userDetails.getUsername(), userDetails.getRoleName(), "LOGOUT", "AUTH", "USER", String.valueOf(userDetails.getId()), null, null, "SUCCESS", "User logged out");
+            systemService.log(userDetails.getId(), userDetails.getUsername(), userDetails.getRoleName(), "LOGOUT", "AUTH", "USER", String.valueOf(userDetails.getId()), null, null, "SUCCESS", "User logged out");
         }
         SecurityContextHolder.clearContext();
         HttpSession session = request.getSession(false);
@@ -127,7 +120,7 @@ public class AuthService {
         User user = userRepository.findById(userDetails.getId())
                 .orElseThrow(() -> new ApiException("User not found", HttpStatus.NOT_FOUND));
 
-        Set<String> permissions = roleRepository.findPermissionNamesByRoleId(user.getRoleId());
+        Set<String> permissions = userRepository.findPermissionNamesByRoleId(user.getRoleId());
         return toDto(user, permissions);
     }
 
@@ -149,7 +142,7 @@ public class AuthService {
         String newHash = passwordEncoder.encode(req.getNewPassword());
         userRepository.updatePassword(userId, newHash, false);
 
-        auditService.log(user.getId(), user.getUsername(), user.getRoleName(), "PASSWORD_CHANGE", "AUTH", "USER", String.valueOf(user.getId()), null, null, "SUCCESS", "Password updated successfully");
+        systemService.log(user.getId(), user.getUsername(), user.getRoleName(), "PASSWORD_CHANGE", "AUTH", "USER", String.valueOf(user.getId()), null, null, "SUCCESS", "Password updated successfully");
     }
 
     public void registerRequest(RegisterRequestDto req, HttpServletRequest request) {
@@ -174,8 +167,8 @@ public class AuthService {
         ar.setStatus("PENDING");
         ar.setRequestType("REGISTRATION");
 
-        Long id = accountRequestRepository.create(ar);
-        auditService.log(null, req.getUsername(), null, "REGISTRATION_REQUEST", "AUTH", "ACCOUNT_REQUEST", String.valueOf(id), null, null, "SUCCESS", "New account registration request submitted");
+        Long id = userRepository.createAccountRequest(ar);
+        systemService.log(null, req.getUsername(), null, "REGISTRATION_REQUEST", "AUTH", "ACCOUNT_REQUEST", String.valueOf(id), null, null, "SUCCESS", "New account registration request submitted");
     }
 
     public void forgotPassword(ForgotPasswordRequest req, HttpServletRequest request) {
@@ -192,10 +185,10 @@ public class AuthService {
             ar.setStatus("PENDING");
             ar.setRequestType("PASSWORD_RESET");
 
-            Long id = accountRequestRepository.create(ar);
-            auditService.log(user.getId(), user.getUsername(), user.getRoleName(), "PASSWORD_RESET_REQUEST", "AUTH", "ACCOUNT_REQUEST", String.valueOf(id), null, null, "SUCCESS", "Password reset request filed");
+            Long id = userRepository.createAccountRequest(ar);
+            systemService.log(user.getId(), user.getUsername(), user.getRoleName(), "PASSWORD_RESET_REQUEST", "AUTH", "ACCOUNT_REQUEST", String.valueOf(id), null, null, "SUCCESS", "Password reset request filed");
         } else {
-            auditService.log(null, req.getUsernameOrEmail(), null, "PASSWORD_RESET_ATTEMPT", "AUTH", "USER", null, null, null, "FAILURE", "Password reset attempted for non-existent user");
+            systemService.log(null, req.getUsernameOrEmail(), null, "PASSWORD_RESET_ATTEMPT", "AUTH", "USER", null, null, null, "FAILURE", "Password reset attempted for non-existent user");
         }
     }
 

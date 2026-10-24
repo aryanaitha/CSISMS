@@ -1,10 +1,10 @@
 package com.csims.service;
 
-import com.csims.exception.ApiException;
-import com.csims.model.AccountRequest;
-import com.csims.model.Permission;
-import com.csims.model.Role;
-import com.csims.model.User;
+import com.csims.exception.AppExceptions.ApiException;
+import com.csims.model.Models.AccountRequest;
+import com.csims.model.Models.Permission;
+import com.csims.model.Models.Role;
+import com.csims.model.Models.User;
 import com.csims.repository.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -22,17 +22,14 @@ import java.util.Optional;
 public class AdminService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final AuditService auditService;
-    private final NotificationService notificationService;
+    private final SystemService systemService;
 
     public AdminService(UserRepository userRepository,
                         PasswordEncoder passwordEncoder,
-                        AuditService auditService,
-                        NotificationService notificationService) {
+                        SystemService systemService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
-        this.auditService = auditService;
-        this.notificationService = notificationService;
+        this.systemService = systemService;
     }
 
     // =========================================================================
@@ -62,7 +59,7 @@ public class AdminService {
         user.setActive(true);
 
         Long createdId = userRepository.createUser(user);
-        auditService.log(operatorId, operatorUsername, null, "USER_CREATE", "USER", "USER", String.valueOf(createdId), null, user.getUsername(), "SUCCESS", "Created new user " + user.getUsername());
+        systemService.log(operatorId, operatorUsername, null, "USER_CREATE", "USER", "USER", String.valueOf(createdId), null, user.getUsername(), "SUCCESS", "Created new user " + user.getUsername());
         return createdId;
     }
 
@@ -80,7 +77,7 @@ public class AdminService {
         existing.setActive(updateData.isActive());
 
         userRepository.updateUser(existing);
-        auditService.log(operatorId, operatorUsername, null, "USER_UPDATE", "USER", "USER", String.valueOf(id), null, existing.getUsername(), "SUCCESS", "Updated user details for " + existing.getUsername());
+        systemService.log(operatorId, operatorUsername, null, "USER_UPDATE", "USER", "USER", String.valueOf(id), null, existing.getUsername(), "SUCCESS", "Updated user details for " + existing.getUsername());
     }
 
     @Transactional
@@ -93,7 +90,7 @@ public class AdminService {
         existing.setActive(active);
         userRepository.updateUser(existing);
         String action = active ? "USER_ACTIVATE" : "USER_DEACTIVATE";
-        auditService.log(operatorId, operatorUsername, null, action, "USER", "USER", String.valueOf(id), null, String.valueOf(active), "SUCCESS", (active ? "Activated" : "Deactivated") + " user " + existing.getUsername());
+        systemService.log(operatorId, operatorUsername, null, action, "USER", "USER", String.valueOf(id), null, String.valueOf(active), "SUCCESS", (active ? "Activated" : "Deactivated") + " user " + existing.getUsername());
     }
 
     @Transactional
@@ -103,7 +100,7 @@ public class AdminService {
         userRepository.updatePassword(id, encoded, true);
         userRepository.resetFailedLoginsAndLock(id);
 
-        auditService.log(operatorId, operatorUsername, null, "PASSWORD_RESET_ADMIN", "USER", "USER", String.valueOf(id), null, null, "SUCCESS", "Admin reset password for user " + existing.getUsername());
+        systemService.log(operatorId, operatorUsername, null, "PASSWORD_RESET_ADMIN", "USER", "USER", String.valueOf(id), null, null, "SUCCESS", "Admin reset password for user " + existing.getUsername());
     }
 
     // =========================================================================
@@ -132,7 +129,7 @@ public class AdminService {
     public void updateRolePermissions(Integer roleId, List<Integer> permissionIds, Long operatorId, String operatorUsername) {
         Role role = getRoleById(roleId);
         userRepository.updateRolePermissions(roleId, permissionIds);
-        auditService.log(operatorId, operatorUsername, null, "ROLE_PERMISSIONS_UPDATE", "ROLE", "ROLE", String.valueOf(roleId), null, null, "SUCCESS", "Updated permissions for role " + role.getName());
+        systemService.log(operatorId, operatorUsername, null, "ROLE_PERMISSIONS_UPDATE", "ROLE", "ROLE", String.valueOf(roleId), null, null, "SUCCESS", "Updated permissions for role " + role.getName());
     }
 
     // =========================================================================
@@ -173,19 +170,19 @@ public class AdminService {
             u.setMustChangePassword(true);
 
             Long createdUserId = userRepository.createUser(u);
-            notificationService.notify(createdUserId, "Account Approved", "Your account registration has been approved. Your temporary password is Welcome@123. You will be prompted to change it upon first login.", "SUCCESS", null);
+            systemService.notify(createdUserId, "Account Approved", "Your account registration has been approved. Your temporary password is Welcome@123. You will be prompted to change it upon first login.", "SUCCESS", null);
         } else if ("PASSWORD_RESET".equalsIgnoreCase(req.getRequestType())) {
             Optional<User> userOpt = userRepository.findByUsernameOrEmail(req.getUsername());
             if (userOpt.isPresent()) {
                 User u = userOpt.get();
                 userRepository.updatePassword(u.getId(), passwordEncoder.encode("Reset@12345"), true);
                 userRepository.resetFailedLoginsAndLock(u.getId());
-                notificationService.notify(u.getId(), "Password Reset Approved", "Your password has been reset to Reset@12345. You must set a new password on your next login.", "INFO", null);
+                systemService.notify(u.getId(), "Password Reset Approved", "Your password has been reset to Reset@12345. You must set a new password on your next login.", "INFO", null);
             }
         }
 
         userRepository.updateAccountRequestReview(id, "APPROVED", reviewerId, reviewNotes);
-        auditService.log(reviewerId, reviewerUsername, null, "ACCOUNT_REQUEST_APPROVE", "ACCOUNT_REQUEST", "ACCOUNT_REQUEST", String.valueOf(id), "PENDING", "APPROVED", "SUCCESS", "Approved " + req.getRequestType() + " for " + req.getUsername());
+        systemService.log(reviewerId, reviewerUsername, null, "ACCOUNT_REQUEST_APPROVE", "ACCOUNT_REQUEST", "ACCOUNT_REQUEST", String.valueOf(id), "PENDING", "APPROVED", "SUCCESS", "Approved " + req.getRequestType() + " for " + req.getUsername());
     }
 
     @Transactional
@@ -196,6 +193,6 @@ public class AdminService {
         }
 
         userRepository.updateAccountRequestReview(id, "REJECTED", reviewerId, reviewNotes);
-        auditService.log(reviewerId, reviewerUsername, null, "ACCOUNT_REQUEST_REJECT", "ACCOUNT_REQUEST", "ACCOUNT_REQUEST", String.valueOf(id), "PENDING", "REJECTED", "SUCCESS", "Rejected " + req.getRequestType() + " for " + req.getUsername() + ". Reason: " + reviewNotes);
+        systemService.log(reviewerId, reviewerUsername, null, "ACCOUNT_REQUEST_REJECT", "ACCOUNT_REQUEST", "ACCOUNT_REQUEST", String.valueOf(id), "PENDING", "REJECTED", "SUCCESS", "Rejected " + req.getRequestType() + " for " + req.getUsername() + ". Reason: " + reviewNotes);
     }
 }

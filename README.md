@@ -46,6 +46,48 @@ Built with **React 18 + Vite** on the frontend, **Spring Boot 3 + Spring JdbcTem
 2. **Method-Level Server RBAC**: Every endpoint enforces permissions (e.g. `@PreAuthorize("hasAuthority('PROJECT_CREATE')")`).
 3. **Session Cookie Security**: Uses `JSESSIONID` cookies with `changeSessionId()` session fixation protection, `HttpOnly`, and `SameSite=Strict`.
 4. **Resilient SPA Serving**: Spring Boot serves the precompiled React single-page application at `/` and forwards client-side HTML5 routes to `/index.html`.
+5. **Consolidated, Readable Structure**: Clean layering with exactly 6 controllers, 6 services, 5 repositories, consolidated models (`Models.java`), consolidated DTOs (`Dtos.java`), unified exceptions (`AppExceptions.java`), and unified config/security (`SecurityConfig.java`), reducing backend clutter from 84 files down to 27 readable files.
+
+### Clean Backend Package Layout
+```
+com.csims
+  |-- CsimsApplication.java
+  |-- config/
+  |    \-- SecurityConfig.java         (Security, CSRF, headers, CORS, SPA routing, BCrypt)
+  |-- controller/
+  |    |-- AuthController.java         (Authentication & session lifecycle)
+  |    |-- AdminController.java        (Users, roles, permissions, account requests)
+  |    |-- ProjectController.java      (Projects, workers, contractors, tasks, attendance)
+  |    |-- InventoryController.java    (Materials, stock receipts/issues, equipment, maintenance)
+  |    |-- SafetyController.java       (Safety inspections, violations, incident reports)
+  |    \-- ReportController.java       (Reports/CSV, dashboard metrics, notifications, audit logs, health)
+  |-- service/
+  |    |-- AuthService.java
+  |    |-- AdminService.java
+  |    |-- ProjectService.java
+  |    |-- InventoryService.java
+  |    |-- SafetyService.java
+  |    \-- SystemService.java          (Audit logging, notifications, KPI metrics, CSV report generation)
+  |-- repository/
+  |    |-- UserRepository.java
+  |    |-- ProjectRepository.java
+  |    |-- InventoryRepository.java
+  |    |-- SafetyRepository.java
+  |    \-- SystemRepository.java
+  |-- model/
+  |    \-- Models.java                 (All 19 entity classes as static nested classes)
+  |-- dto/
+  |    |-- ApiResponse.java            (Standard JSON response envelope)
+  |    \-- Dtos.java                   (Request / response records and DTOs)
+  |-- exception/
+  |    |-- AppExceptions.java          (Consolidated runtime exceptions)
+  |    \-- GlobalExceptionHandler.java (@RestControllerAdvice handling all API errors)
+  |-- security/
+  |    |-- CustomUserDetails.java
+  |    \-- CustomUserDetailsService.java
+  \-- util/
+       \-- Utils.java                  (RFC-4180 CSV export and data utilities)
+```
 
 ---
 

@@ -1,7 +1,7 @@
 package com.csims;
 
-import com.csims.exception.ApiException;
-import com.csims.model.Material;
+import com.csims.exception.AppExceptions.ApiException;
+import com.csims.model.Models.Material;
 import com.csims.service.InventoryService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

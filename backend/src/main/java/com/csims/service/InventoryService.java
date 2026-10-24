@@ -1,10 +1,10 @@
 package com.csims.service;
 
-import com.csims.exception.ApiException;
-import com.csims.model.Equipment;
-import com.csims.model.InventoryTransaction;
-import com.csims.model.MaintenanceRecord;
-import com.csims.model.Material;
+import com.csims.exception.AppExceptions.ApiException;
+import com.csims.model.Models.Equipment;
+import com.csims.model.Models.InventoryTransaction;
+import com.csims.model.Models.MaintenanceRecord;
+import com.csims.model.Models.Material;
 import com.csims.repository.InventoryRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -21,15 +21,12 @@ import java.util.List;
 @Service
 public class InventoryService {
     private final InventoryRepository inventoryRepository;
-    private final AuditService auditService;
-    private final NotificationService notificationService;
+    private final SystemService systemService;
 
     public InventoryService(InventoryRepository inventoryRepository,
-                            AuditService auditService,
-                            NotificationService notificationService) {
+                            SystemService systemService) {
         this.inventoryRepository = inventoryRepository;
-        this.auditService = auditService;
-        this.notificationService = notificationService;
+        this.systemService = systemService;
     }
 
     // =========================================================================
@@ -48,7 +45,7 @@ public class InventoryService {
     @Transactional
     public Integer createMaterial(Material m, Long operatorId, String operatorUsername) {
         Integer id = inventoryRepository.createMaterial(m);
-        auditService.log(operatorId, operatorUsername, null, "INVENTORY_CREATE", "INVENTORY", "MATERIAL", String.valueOf(id), null, m.getName(), "SUCCESS", "Added new material to catalog: " + m.getName() + " (" + m.getMaterialCode() + ")");
+        systemService.log(operatorId, operatorUsername, null, "INVENTORY_CREATE", "INVENTORY", "MATERIAL", String.valueOf(id), null, m.getName(), "SUCCESS", "Added new material to catalog: " + m.getName() + " (" + m.getMaterialCode() + ")");
         return id;
     }
 
@@ -57,7 +54,7 @@ public class InventoryService {
         Material existing = getMaterialById(id);
         m.setId(id);
         inventoryRepository.updateMaterial(m);
-        auditService.log(operatorId, operatorUsername, null, "INVENTORY_UPDATE", "INVENTORY", "MATERIAL", String.valueOf(id), existing.getName(), m.getName(), "SUCCESS", "Updated material details for " + m.getName());
+        systemService.log(operatorId, operatorUsername, null, "INVENTORY_UPDATE", "INVENTORY", "MATERIAL", String.valueOf(id), existing.getName(), m.getName(), "SUCCESS", "Updated material details for " + m.getName());
     }
 
     @Transactional
@@ -78,7 +75,7 @@ public class InventoryService {
         tx.setPerformedBy(operatorId);
         inventoryRepository.recordTransaction(tx);
 
-        auditService.log(operatorId, operatorUsername, null, "INVENTORY_RECEIPT", "INVENTORY", "MATERIAL", String.valueOf(materialId), String.valueOf(m.getQuantityOnHand()), String.valueOf(m.getQuantityOnHand().add(quantity)), "SUCCESS", "Received " + quantity + " " + m.getUnit() + " of " + m.getName());
+        systemService.log(operatorId, operatorUsername, null, "INVENTORY_RECEIPT", "INVENTORY", "MATERIAL", String.valueOf(materialId), String.valueOf(m.getQuantityOnHand()), String.valueOf(m.getQuantityOnHand().add(quantity)), "SUCCESS", "Received " + quantity + " " + m.getUnit() + " of " + m.getName());
     }
 
     @Transactional
@@ -92,7 +89,7 @@ public class InventoryService {
         // Atomic check: If stock is insufficient, throw exception and ROLL BACK
         if (m.getQuantityOnHand().compareTo(quantity) < 0) {
             String errorMsg = "Insufficient stock for " + m.getName() + ". Available: " + m.getQuantityOnHand() + " " + m.getUnit() + ", Requested: " + quantity + " " + m.getUnit();
-            auditService.log(operatorId, operatorUsername, null, "INVENTORY_ISSUE_FAILED", "INVENTORY", "MATERIAL", String.valueOf(materialId), String.valueOf(m.getQuantityOnHand()), String.valueOf(quantity), "FAILURE", errorMsg);
+            systemService.log(operatorId, operatorUsername, null, "INVENTORY_ISSUE_FAILED", "INVENTORY", "MATERIAL", String.valueOf(materialId), String.valueOf(m.getQuantityOnHand()), String.valueOf(quantity), "FAILURE", errorMsg);
             throw new ApiException(errorMsg, HttpStatus.BAD_REQUEST);
         }
 
@@ -109,12 +106,12 @@ public class InventoryService {
         inventoryRepository.recordTransaction(tx);
 
         BigDecimal remaining = m.getQuantityOnHand().subtract(quantity);
-        auditService.log(operatorId, operatorUsername, null, "INVENTORY_ISSUE", "INVENTORY", "MATERIAL", String.valueOf(materialId), String.valueOf(m.getQuantityOnHand()), String.valueOf(remaining), "SUCCESS", "Issued " + quantity + " " + m.getUnit() + " of " + m.getName() + " to project #" + projectId);
+        systemService.log(operatorId, operatorUsername, null, "INVENTORY_ISSUE", "INVENTORY", "MATERIAL", String.valueOf(materialId), String.valueOf(m.getQuantityOnHand()), String.valueOf(remaining), "SUCCESS", "Issued " + quantity + " " + m.getUnit() + " of " + m.getName() + " to project #" + projectId);
 
         // Low stock threshold alert check
         if (remaining.compareTo(m.getMinStock()) <= 0) {
-            auditService.log(null, "SYSTEM", "SYSTEM", "INVENTORY_LOW_STOCK", "INVENTORY", "MATERIAL", String.valueOf(materialId), null, String.valueOf(remaining), "WARNING", "Material " + m.getName() + " reached low stock threshold: " + remaining + " remaining");
-            notificationService.notify(1L, "Low Stock Warning", "Material " + m.getName() + " is at or below minimum stock level (" + remaining + " remaining).", "WARNING", "/inventory");
+            systemService.log(null, "SYSTEM", "SYSTEM", "INVENTORY_LOW_STOCK", "INVENTORY", "MATERIAL", String.valueOf(materialId), null, String.valueOf(remaining), "WARNING", "Material " + m.getName() + " reached low stock threshold: " + remaining + " remaining");
+            systemService.notify(1L, "Low Stock Warning", "Material " + m.getName() + " is at or below minimum stock level (" + remaining + " remaining).", "WARNING", "/inventory");
         }
     }
 
@@ -138,7 +135,7 @@ public class InventoryService {
     @Transactional
     public Integer createEquipment(Equipment e, Long operatorId, String operatorUsername) {
         Integer id = inventoryRepository.createEquipment(e);
-        auditService.log(operatorId, operatorUsername, null, "EQUIPMENT_CREATE", "EQUIPMENT", "EQUIPMENT", String.valueOf(id), null, e.getName(), "SUCCESS", "Registered machinery: " + e.getName() + " (" + e.getEquipmentCode() + ")");
+        systemService.log(operatorId, operatorUsername, null, "EQUIPMENT_CREATE", "EQUIPMENT", "EQUIPMENT", String.valueOf(id), null, e.getName(), "SUCCESS", "Registered machinery: " + e.getName() + " (" + e.getEquipmentCode() + ")");
         return id;
     }
 
@@ -147,14 +144,14 @@ public class InventoryService {
         Equipment existing = getEquipmentById(id);
         e.setId(id);
         inventoryRepository.updateEquipment(e);
-        auditService.log(operatorId, operatorUsername, null, "EQUIPMENT_UPDATE", "EQUIPMENT", "EQUIPMENT", String.valueOf(id), existing.getStatus(), e.getStatus(), "SUCCESS", "Updated equipment details for " + e.getName());
+        systemService.log(operatorId, operatorUsername, null, "EQUIPMENT_UPDATE", "EQUIPMENT", "EQUIPMENT", String.valueOf(id), existing.getStatus(), e.getStatus(), "SUCCESS", "Updated equipment details for " + e.getName());
     }
 
     @Transactional
     public void updateEquipmentStatus(Integer id, String status, Long operatorId, String operatorUsername) {
         Equipment existing = getEquipmentById(id);
         inventoryRepository.updateEquipmentStatus(id, status);
-        auditService.log(operatorId, operatorUsername, null, "EQUIPMENT_STATUS_UPDATE", "EQUIPMENT", "EQUIPMENT", String.valueOf(id), existing.getStatus(), status, "SUCCESS", "Updated equipment #" + id + " status to " + status);
+        systemService.log(operatorId, operatorUsername, null, "EQUIPMENT_STATUS_UPDATE", "EQUIPMENT", "EQUIPMENT", String.valueOf(id), existing.getStatus(), status, "SUCCESS", "Updated equipment #" + id + " status to " + status);
     }
 
     // Compatibility method
@@ -180,7 +177,7 @@ public class InventoryService {
     public Integer scheduleMaintenance(MaintenanceRecord m, Long operatorId, String operatorUsername) {
         inventoryRepository.updateEquipmentStatus(m.getEquipmentId(), "Maintenance");
         Integer id = inventoryRepository.createMaintenance(m);
-        auditService.log(operatorId, operatorUsername, null, "MAINTENANCE_SCHEDULE", "MAINTENANCE", "MAINTENANCE", String.valueOf(id), null, m.getMaintenanceType(), "SUCCESS", "Scheduled maintenance for equipment #" + m.getEquipmentId());
+        systemService.log(operatorId, operatorUsername, null, "MAINTENANCE_SCHEDULE", "MAINTENANCE", "MAINTENANCE", String.valueOf(id), null, m.getMaintenanceType(), "SUCCESS", "Scheduled maintenance for equipment #" + m.getEquipmentId());
         return id;
     }
 
@@ -198,6 +195,6 @@ public class InventoryService {
         }
 
         inventoryRepository.updateMaintenance(m);
-        auditService.log(operatorId, operatorUsername, null, "MAINTENANCE_UPDATE", "MAINTENANCE", "MAINTENANCE", String.valueOf(id), existing.getStatus(), m.getStatus(), "SUCCESS", "Updated maintenance service order #" + id + " to " + m.getStatus());
+        systemService.log(operatorId, operatorUsername, null, "MAINTENANCE_UPDATE", "MAINTENANCE", "MAINTENANCE", String.valueOf(id), existing.getStatus(), m.getStatus(), "SUCCESS", "Updated maintenance service order #" + id + " to " + m.getStatus());
     }
 }

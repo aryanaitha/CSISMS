@@ -1,9 +1,9 @@
 package com.csims.service;
 
-import com.csims.exception.ApiException;
-import com.csims.model.Incident;
-import com.csims.model.SafetyInspection;
-import com.csims.model.SafetyViolation;
+import com.csims.exception.AppExceptions.ApiException;
+import com.csims.model.Models.Incident;
+import com.csims.model.Models.SafetyInspection;
+import com.csims.model.Models.SafetyViolation;
 import com.csims.repository.SafetyRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -21,15 +21,12 @@ import java.util.List;
 @Service
 public class SafetyService {
     private final SafetyRepository safetyRepository;
-    private final AuditService auditService;
-    private final NotificationService notificationService;
+    private final SystemService systemService;
 
     public SafetyService(SafetyRepository safetyRepository,
-                         AuditService auditService,
-                         NotificationService notificationService) {
+                         SystemService systemService) {
         this.safetyRepository = safetyRepository;
-        this.auditService = auditService;
-        this.notificationService = notificationService;
+        this.systemService = systemService;
     }
 
     // =========================================================================
@@ -56,11 +53,11 @@ public class SafetyService {
         si.setOverallScore(overall);
 
         Integer id = safetyRepository.createInspection(si);
-        auditService.log(inspectorId, inspectorUsername, null, "SAFETY_INSPECTION_CONDUCT", "SAFETY", "SAFETY_INSPECTION", String.valueOf(id), null, String.valueOf(overall), "SUCCESS", "Completed site safety inspection with score " + overall + "%");
+        systemService.log(inspectorId, inspectorUsername, null, "SAFETY_INSPECTION_CONDUCT", "SAFETY", "SAFETY_INSPECTION", String.valueOf(id), null, String.valueOf(overall), "SUCCESS", "Completed site safety inspection with score " + overall + "%");
 
         // If score < 70, trigger warning notification
         if (overall.compareTo(BigDecimal.valueOf(70)) < 0) {
-            notificationService.notify(inspectorId, "Safety Score Alert (< 70%)", "Site inspection #" + id + " scored only " + overall + "%. Urgent corrective safety actions required.", "DANGER", "/safety");
+            systemService.notify(inspectorId, "Safety Score Alert (< 70%)", "Site inspection #" + id + " scored only " + overall + "%. Urgent corrective safety actions required.", "DANGER", "/safety");
         }
 
         return id;
@@ -84,7 +81,7 @@ public class SafetyService {
         sv.setReportedBy(reporterId);
         if (sv.getStatus() == null) sv.setStatus("OPEN");
         Integer id = safetyRepository.createViolation(sv);
-        auditService.log(reporterId, reporterUsername, null, "SAFETY_VIOLATION_LOG", "SAFETY", "SAFETY_VIOLATION", String.valueOf(id), null, sv.getSeverity(), "SUCCESS", "Logged " + sv.getSeverity() + " safety violation: " + sv.getDescription());
+        systemService.log(reporterId, reporterUsername, null, "SAFETY_VIOLATION_LOG", "SAFETY", "SAFETY_VIOLATION", String.valueOf(id), null, sv.getSeverity(), "SUCCESS", "Logged " + sv.getSeverity() + " safety violation: " + sv.getDescription());
         return id;
     }
 
@@ -96,7 +93,7 @@ public class SafetyService {
             sv.setResolutionDate(LocalDate.now());
         }
         safetyRepository.updateViolation(sv);
-        auditService.log(operatorId, operatorUsername, null, "SAFETY_VIOLATION_UPDATE", "SAFETY", "SAFETY_VIOLATION", String.valueOf(id), existing.getStatus(), sv.getStatus(), "SUCCESS", "Updated safety violation #" + id + " status to " + sv.getStatus());
+        systemService.log(operatorId, operatorUsername, null, "SAFETY_VIOLATION_UPDATE", "SAFETY", "SAFETY_VIOLATION", String.valueOf(id), existing.getStatus(), sv.getStatus(), "SUCCESS", "Updated safety violation #" + id + " status to " + sv.getStatus());
     }
 
     // =========================================================================
@@ -116,11 +113,11 @@ public class SafetyService {
     public Integer reportIncident(Incident inc, Long reporterId, String reporterUsername) {
         inc.setReportedBy(reporterId);
         Integer id = safetyRepository.createIncident(inc);
-        auditService.log(reporterId, reporterUsername, null, "INCIDENT_REPORT", "INCIDENT", "INCIDENT", String.valueOf(id), null, inc.getSeverity(), "SUCCESS", "Reported " + inc.getSeverity() + " incident: " + inc.getTitle());
+        systemService.log(reporterId, reporterUsername, null, "INCIDENT_REPORT", "INCIDENT", "INCIDENT", String.valueOf(id), null, inc.getSeverity(), "SUCCESS", "Reported " + inc.getSeverity() + " incident: " + inc.getTitle());
 
         // High priority broadcast alert if FATALITY or INJURY
         if ("FATALITY".equalsIgnoreCase(inc.getSeverity()) || "INJURY".equalsIgnoreCase(inc.getSeverity())) {
-            notificationService.notify(reporterId, "EMERGENCY: " + inc.getSeverity() + " Reported!", "Accident reported at project #" + inc.getProjectId() + ": " + inc.getTitle() + ". Immediate response required.", "DANGER", "/incidents");
+            systemService.notify(reporterId, "EMERGENCY: " + inc.getSeverity() + " Reported!", "Accident reported at project #" + inc.getProjectId() + ": " + inc.getTitle() + ". Immediate response required.", "DANGER", "/incidents");
         }
 
         return id;
@@ -131,6 +128,6 @@ public class SafetyService {
         Incident existing = getIncidentById(id);
         inc.setId(id);
         safetyRepository.updateIncident(inc);
-        auditService.log(operatorId, operatorUsername, null, "INCIDENT_UPDATE", "INCIDENT", "INCIDENT", String.valueOf(id), existing.getStatus(), inc.getStatus(), "SUCCESS", "Updated incident #" + id + " to " + inc.getStatus());
+        systemService.log(operatorId, operatorUsername, null, "INCIDENT_UPDATE", "INCIDENT", "INCIDENT", String.valueOf(id), existing.getStatus(), inc.getStatus(), "SUCCESS", "Updated incident #" + id + " to " + inc.getStatus());
     }
 }

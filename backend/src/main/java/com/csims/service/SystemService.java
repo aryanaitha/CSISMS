@@ -1,7 +1,7 @@
 package com.csims.service;
 
 import com.csims.dto.Dtos.ReportResultDto;
-import com.csims.model.*;
+import com.csims.model.Models.*;
 import com.csims.repository.InventoryRepository;
 import com.csims.repository.ProjectRepository;
 import com.csims.repository.SafetyRepository;

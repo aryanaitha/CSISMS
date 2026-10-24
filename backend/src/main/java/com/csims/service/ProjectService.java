@@ -1,12 +1,12 @@
 package com.csims.service;
 
-import com.csims.exception.ApiException;
-import com.csims.model.Attendance;
-import com.csims.model.Contractor;
-import com.csims.model.Project;
-import com.csims.model.ProjectWorker;
-import com.csims.model.Task;
-import com.csims.model.Worker;
+import com.csims.exception.AppExceptions.ApiException;
+import com.csims.model.Models.Attendance;
+import com.csims.model.Models.Contractor;
+import com.csims.model.Models.Project;
+import com.csims.model.Models.ProjectWorker;
+import com.csims.model.Models.Task;
+import com.csims.model.Models.Worker;
 import com.csims.repository.ProjectRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -22,15 +22,12 @@ import java.util.List;
 @Service
 public class ProjectService {
     private final ProjectRepository projectRepository;
-    private final AuditService auditService;
-    private final NotificationService notificationService;
+    private final SystemService systemService;
 
     public ProjectService(ProjectRepository projectRepository,
-                          AuditService auditService,
-                          NotificationService notificationService) {
+                          SystemService systemService) {
         this.projectRepository = projectRepository;
-        this.auditService = auditService;
-        this.notificationService = notificationService;
+        this.systemService = systemService;
     }
 
     // =========================================================================
@@ -49,7 +46,7 @@ public class ProjectService {
     @Transactional
     public Integer createProject(Project p, Long operatorId, String operatorUsername) {
         Integer id = projectRepository.create(p);
-        auditService.log(operatorId, operatorUsername, null, "PROJECT_CREATE", "PROJECT", "PROJECT", String.valueOf(id), null, p.getProjectName(), "SUCCESS", "Created new project " + p.getProjectName());
+        systemService.log(operatorId, operatorUsername, null, "PROJECT_CREATE", "PROJECT", "PROJECT", String.valueOf(id), null, p.getProjectName(), "SUCCESS", "Created new project " + p.getProjectName());
         return id;
     }
 
@@ -58,21 +55,21 @@ public class ProjectService {
         Project existing = getProjectById(id);
         p.setId(id);
         projectRepository.update(p);
-        auditService.log(operatorId, operatorUsername, null, "PROJECT_UPDATE", "PROJECT", "PROJECT", String.valueOf(id), existing.getStatus(), p.getStatus(), "SUCCESS", "Updated project details for " + p.getProjectName());
+        systemService.log(operatorId, operatorUsername, null, "PROJECT_UPDATE", "PROJECT", "PROJECT", String.valueOf(id), existing.getStatus(), p.getStatus(), "SUCCESS", "Updated project details for " + p.getProjectName());
     }
 
     @Transactional
     public void updateStatus(Integer id, String newStatus, Long operatorId, String operatorUsername) {
         Project existing = getProjectById(id);
         projectRepository.updateStatus(id, newStatus);
-        auditService.log(operatorId, operatorUsername, null, "PROJECT_STATUS_UPDATE", "PROJECT", "PROJECT", String.valueOf(id), existing.getStatus(), newStatus, "SUCCESS", "Transitioned status of project " + existing.getProjectName() + " to " + newStatus);
+        systemService.log(operatorId, operatorUsername, null, "PROJECT_STATUS_UPDATE", "PROJECT", "PROJECT", String.valueOf(id), existing.getStatus(), newStatus, "SUCCESS", "Transitioned status of project " + existing.getProjectName() + " to " + newStatus);
     }
 
     @Transactional
     public void updateProgress(Integer id, Integer progressPercent, Long operatorId, String operatorUsername) {
         Project existing = getProjectById(id);
         projectRepository.updateProgress(id, progressPercent);
-        auditService.log(operatorId, operatorUsername, null, "PROJECT_PROGRESS_UPDATE", "PROJECT", "PROJECT", String.valueOf(id), String.valueOf(existing.getProgressPercent()), String.valueOf(progressPercent), "SUCCESS", "Updated progress of project " + existing.getProjectName() + " to " + progressPercent + "%");
+        systemService.log(operatorId, operatorUsername, null, "PROJECT_PROGRESS_UPDATE", "PROJECT", "PROJECT", String.valueOf(id), String.valueOf(existing.getProgressPercent()), String.valueOf(progressPercent), "SUCCESS", "Updated progress of project " + existing.getProjectName() + " to " + progressPercent + "%");
     }
 
     @Transactional
@@ -89,14 +86,14 @@ public class ProjectService {
     public void assignWorker(Integer projectId, Integer workerId, String roleInProject, Long operatorId, String operatorUsername) {
         Project p = getProjectById(projectId);
         projectRepository.assignWorkerToProject(projectId, workerId, roleInProject);
-        auditService.log(operatorId, operatorUsername, null, "PROJECT_WORKER_ASSIGN", "PROJECT", "WORKER", String.valueOf(workerId), null, String.valueOf(projectId), "SUCCESS", "Assigned worker #" + workerId + " to project " + p.getProjectName());
+        systemService.log(operatorId, operatorUsername, null, "PROJECT_WORKER_ASSIGN", "PROJECT", "WORKER", String.valueOf(workerId), null, String.valueOf(projectId), "SUCCESS", "Assigned worker #" + workerId + " to project " + p.getProjectName());
     }
 
     @Transactional
     public void removeWorker(Integer projectId, Integer workerId, Long operatorId, String operatorUsername) {
         Project p = getProjectById(projectId);
         projectRepository.removeWorkerFromProject(projectId, workerId);
-        auditService.log(operatorId, operatorUsername, null, "PROJECT_WORKER_REMOVE", "PROJECT", "WORKER", String.valueOf(workerId), String.valueOf(projectId), null, "SUCCESS", "Removed worker #" + workerId + " from project " + p.getProjectName());
+        systemService.log(operatorId, operatorUsername, null, "PROJECT_WORKER_REMOVE", "PROJECT", "WORKER", String.valueOf(workerId), String.valueOf(projectId), null, "SUCCESS", "Removed worker #" + workerId + " from project " + p.getProjectName());
     }
 
     // =========================================================================
@@ -115,7 +112,7 @@ public class ProjectService {
     @Transactional
     public Integer createContractor(Contractor c, Long operatorId, String operatorUsername) {
         Integer id = projectRepository.createContractor(c);
-        auditService.log(operatorId, operatorUsername, null, "CONTRACTOR_CREATE", "WORKFORCE", "CONTRACTOR", String.valueOf(id), null, c.getCompanyName(), "SUCCESS", "Created contractor " + c.getCompanyName());
+        systemService.log(operatorId, operatorUsername, null, "CONTRACTOR_CREATE", "WORKFORCE", "CONTRACTOR", String.valueOf(id), null, c.getCompanyName(), "SUCCESS", "Created contractor " + c.getCompanyName());
         return id;
     }
 
@@ -124,7 +121,7 @@ public class ProjectService {
         Contractor existing = getContractorById(id);
         c.setId(id);
         projectRepository.updateContractor(c);
-        auditService.log(operatorId, operatorUsername, null, "CONTRACTOR_UPDATE", "WORKFORCE", "CONTRACTOR", String.valueOf(id), existing.getCompanyName(), c.getCompanyName(), "SUCCESS", "Updated contractor details for " + c.getCompanyName());
+        systemService.log(operatorId, operatorUsername, null, "CONTRACTOR_UPDATE", "WORKFORCE", "CONTRACTOR", String.valueOf(id), existing.getCompanyName(), c.getCompanyName(), "SUCCESS", "Updated contractor details for " + c.getCompanyName());
     }
 
     public List<Worker> getAllWorkers(String status, Integer contractorId) {
@@ -139,7 +136,7 @@ public class ProjectService {
     @Transactional
     public Integer createWorker(Worker w, Long operatorId, String operatorUsername) {
         Integer id = projectRepository.createWorker(w);
-        auditService.log(operatorId, operatorUsername, null, "WORKER_CREATE", "WORKFORCE", "WORKER", String.valueOf(id), null, w.getFullName(), "SUCCESS", "Created worker " + w.getFullName());
+        systemService.log(operatorId, operatorUsername, null, "WORKER_CREATE", "WORKFORCE", "WORKER", String.valueOf(id), null, w.getFullName(), "SUCCESS", "Created worker " + w.getFullName());
         return id;
     }
 
@@ -148,7 +145,7 @@ public class ProjectService {
         Worker existing = getWorkerById(id);
         w.setId(id);
         projectRepository.updateWorker(w);
-        auditService.log(operatorId, operatorUsername, null, "WORKER_UPDATE", "WORKFORCE", "WORKER", String.valueOf(id), existing.getFullName(), w.getFullName(), "SUCCESS", "Updated worker details for " + w.getFullName());
+        systemService.log(operatorId, operatorUsername, null, "WORKER_UPDATE", "WORKFORCE", "WORKER", String.valueOf(id), existing.getFullName(), w.getFullName(), "SUCCESS", "Updated worker details for " + w.getFullName());
     }
 
     // =========================================================================
@@ -167,7 +164,7 @@ public class ProjectService {
     @Transactional
     public Integer createTask(Task t, Long operatorId, String operatorUsername) {
         Integer id = projectRepository.createTask(t);
-        auditService.log(operatorId, operatorUsername, null, "TASK_CREATE", "TASK", "TASK", String.valueOf(id), null, t.getTitle(), "SUCCESS", "Created task " + t.getTitle());
+        systemService.log(operatorId, operatorUsername, null, "TASK_CREATE", "TASK", "TASK", String.valueOf(id), null, t.getTitle(), "SUCCESS", "Created task " + t.getTitle());
         return id;
     }
 
@@ -176,7 +173,7 @@ public class ProjectService {
         Task existing = getTaskById(id);
         t.setId(id);
         projectRepository.updateTask(t);
-        auditService.log(operatorId, operatorUsername, null, "TASK_UPDATE", "TASK", "TASK", String.valueOf(id), existing.getStatus(), t.getStatus(), "SUCCESS", "Updated task details for " + t.getTitle());
+        systemService.log(operatorId, operatorUsername, null, "TASK_UPDATE", "TASK", "TASK", String.valueOf(id), existing.getStatus(), t.getStatus(), "SUCCESS", "Updated task details for " + t.getTitle());
     }
 
     @Transactional
@@ -187,14 +184,14 @@ public class ProjectService {
             finalProgress = 100;
         }
         projectRepository.updateTaskStatus(id, status, finalProgress);
-        auditService.log(operatorId, operatorUsername, null, "TASK_STATUS_UPDATE", "TASK", "TASK", String.valueOf(id), existing.getStatus(), status, "SUCCESS", "Updated task #" + id + " to " + status + " (" + finalProgress + "%)");
+        systemService.log(operatorId, operatorUsername, null, "TASK_STATUS_UPDATE", "TASK", "TASK", String.valueOf(id), existing.getStatus(), status, "SUCCESS", "Updated task #" + id + " to " + status + " (" + finalProgress + "%)");
     }
 
     @Transactional
     public void assignTaskWorker(Integer id, Integer workerId, Long operatorId, String operatorUsername) {
         Task existing = getTaskById(id);
         projectRepository.assignTaskWorker(id, workerId);
-        auditService.log(operatorId, operatorUsername, null, "TASK_ASSIGN", "TASK", "TASK", String.valueOf(id), String.valueOf(existing.getAssignedWorkerId()), String.valueOf(workerId), "SUCCESS", "Assigned task #" + id + " to worker #" + workerId);
+        systemService.log(operatorId, operatorUsername, null, "TASK_ASSIGN", "TASK", "TASK", String.valueOf(id), String.valueOf(existing.getAssignedWorkerId()), String.valueOf(workerId), "SUCCESS", "Assigned task #" + id + " to worker #" + workerId);
     }
 
     // =========================================================================
@@ -214,13 +211,13 @@ public class ProjectService {
     public void recordAttendance(Attendance a, Long operatorId, String operatorUsername) {
         a.setRecordedBy(operatorId);
         projectRepository.recordAttendance(a);
-        auditService.log(operatorId, operatorUsername, null, "ATTENDANCE_RECORD", "ATTENDANCE", "ATTENDANCE", String.valueOf(a.getWorkerId()), null, a.getStatus(), "SUCCESS", "Recorded attendance for worker #" + a.getWorkerId() + " on " + a.getAttendanceDate() + ": " + a.getStatus());
+        systemService.log(operatorId, operatorUsername, null, "ATTENDANCE_RECORD", "ATTENDANCE", "ATTENDANCE", String.valueOf(a.getWorkerId()), null, a.getStatus(), "SUCCESS", "Recorded attendance for worker #" + a.getWorkerId() + " on " + a.getAttendanceDate() + ": " + a.getStatus());
     }
 
     @Transactional
     public void correctAttendance(Integer id, String status, String remarks, Long operatorId, String operatorUsername) {
         Attendance existing = getAttendanceById(id);
         projectRepository.correctAttendance(id, status, remarks, operatorId);
-        auditService.log(operatorId, operatorUsername, null, "ATTENDANCE_CORRECT", "ATTENDANCE", "ATTENDANCE", String.valueOf(id), existing.getStatus(), status, "SUCCESS", "Corrected attendance record #" + id + " from " + existing.getStatus() + " to " + status + ". Reason: " + remarks);
+        systemService.log(operatorId, operatorUsername, null, "ATTENDANCE_CORRECT", "ATTENDANCE", "ATTENDANCE", String.valueOf(id), existing.getStatus(), status, "SUCCESS", "Corrected attendance record #" + id + " from " + existing.getStatus() + " to " + status + ". Reason: " + remarks);
     }
 }

@@ -1,6 +1,7 @@
 package com.csims.controller;
 
-import com.csims.dto.*;
+import com.csims.dto.Dtos.*;
+import com.csims.dto.ApiResponse;
 import com.csims.security.CustomUserDetails;
 import com.csims.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;

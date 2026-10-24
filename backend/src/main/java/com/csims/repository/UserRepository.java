@@ -1,9 +1,9 @@
 package com.csims.repository;
 
-import com.csims.model.AccountRequest;
-import com.csims.model.Permission;
-import com.csims.model.Role;
-import com.csims.model.User;
+import com.csims.model.Models.AccountRequest;
+import com.csims.model.Models.Permission;
+import com.csims.model.Models.Role;
+import com.csims.model.Models.User;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
