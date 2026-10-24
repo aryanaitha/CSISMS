@@ -35,7 +35,7 @@ public class AuthIntegrationTest {
 
     @Test
     @DisplayName("Valid admin login returns 200, session cookie, and user details")
-    void validLoginSucceeds() throws Exception {
+    void validAdminLoginSucceeds() throws Exception {
         Map<String, String> creds = Map.of("username", "admin", "password", "Admin@123");
 
         mockMvc.perform(post("/api/auth/login")
@@ -45,6 +45,97 @@ public class AuthIntegrationTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.username").value("admin"))
                 .andExpect(jsonPath("$.data.roleName").value("Administrator"));
+    }
+
+    @Test
+    @DisplayName("Valid Project Manager login returns 200")
+    void validProjectManagerLoginSucceeds() throws Exception {
+        Map<String, String> creds = Map.of("username", "pm_sarah", "password", "Pm@12345");
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(creds)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.roleName").value("Project Manager"));
+    }
+
+    @Test
+    @DisplayName("Valid Site Engineer login returns 200")
+    void validSiteEngineerLoginSucceeds() throws Exception {
+        Map<String, String> creds = Map.of("username", "site_eng", "password", "Eng@12345");
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(creds)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.roleName").value("Site Engineer"));
+    }
+
+    @Test
+    @DisplayName("Valid Safety Officer login returns 200")
+    void validSafetyOfficerLoginSucceeds() throws Exception {
+        Map<String, String> creds = Map.of("username", "safety_dan", "password", "Safe@12345");
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(creds)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.roleName").value("Safety Officer"));
+    }
+
+    @Test
+    @DisplayName("Valid Inventory Manager login returns 200")
+    void validInventoryManagerLoginSucceeds() throws Exception {
+        Map<String, String> creds = Map.of("username", "inv_maria", "password", "Inv@12345");
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(creds)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.roleName").value("Inventory Manager"));
+    }
+
+    @Test
+    @DisplayName("Valid Equipment Manager login returns 200")
+    void validEquipmentManagerLoginSucceeds() throws Exception {
+        Map<String, String> creds = Map.of("username", "equip_sam", "password", "Equip@12345");
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(creds)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.roleName").value("Equipment Manager"));
+    }
+
+    @Test
+    @DisplayName("Valid Contractor login returns 200")
+    void validContractorLoginSucceeds() throws Exception {
+        Map<String, String> creds = Map.of("username", "contractor_apex", "password", "Cont@12345");
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(creds)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.roleName").value("Contractor"));
+    }
+
+    @Test
+    @DisplayName("Valid Worker login returns 200")
+    void validWorkerLoginSucceeds() throws Exception {
+        Map<String, String> creds = Map.of("username", "worker_bill", "password", "Worker@12345");
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(creds)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.roleName").value("Worker"));
     }
 
     @Test

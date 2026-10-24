@@ -14,9 +14,9 @@ export default function Modal({ isOpen, onClose, title, children, footer, maxWid
   if (!isOpen) return null;
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop modal-overlay" onClick={onClose}>
       <div 
-        className="modal-container" 
+        className="modal-container modal-content" 
         style={{ maxWidth }} 
         onClick={(e) => e.stopPropagation()}
         role="dialog"
@@ -25,7 +25,7 @@ export default function Modal({ isOpen, onClose, title, children, footer, maxWid
         <div className="modal-header">
           <h3 className="modal-title">{title}</h3>
           {onClose && (
-            <button className="modal-close-btn" onClick={onClose} aria-label="Close">
+            <button type="button" className="modal-close-btn" onClick={onClose} aria-label="Close">
               ✕
             </button>
           )}

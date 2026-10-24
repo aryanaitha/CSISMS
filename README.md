@@ -51,21 +51,20 @@ Built with **React 18 + Vite** on the frontend, **Spring Boot 3 + Spring JdbcTem
 
 ## 2. Seeded Demo Accounts & Credentials
 
-The database is pre-seeded with 8 roles, 46 permissions, and test accounts:
+The system features **8 enterprise roles** with exactly one demo user per role:
 
 | Username | Password | Role | Responsibilities & Primary Modules |
 | :--- | :--- | :--- | :--- |
-| **`admin`** | `Admin@123` | Administrator | Full unrestricted access, User CRUD, Role Matrix, Audit Logs |
-| **`pm_sarah`** | `Pm@12345` | Project Manager | Projects, Budgets, Workforce assignments, Task milestones |
-| **`site_eng`** | `Eng@12345` | Site Engineer | Tasks execution, Daily workforce attendance, Material requests |
-| **`safety_dan`** | `Safe@12345` | Safety Officer | Safety inspections (5-score checklist), Violations, Incidents |
-| **`inv_maria`** | `Inv@12345` | Inventory Manager | Material catalog, Stock receipts & issues, Low-stock alerts |
-| **`equip_sam`** | `Equip@12345` | Equipment Manager | Machinery catalog, Preventative maintenance scheduling |
-| **`contractor_apex`** | `Cont@12345` | Contractor | Subcontractor workforce overview, Assigned subcontract tasks |
-| **`worker_bill`** | `Worker@12345` | Worker | Assigned task execution, Personal monthly attendance log |
-| **`reset_test`** | `Reset@12345` | Site Engineer | Demo account with `must_change_password = true` |
+| **`admin`** | `Admin@123` | Administrator | Full unrestricted access, User CRUD, Role Matrix, System Audit Trail |
+| **`pm_sarah`** | `Pm@12345` | Project Manager | Project timelines, Budgets, Workforce allocation, Tasks, Project Reports |
+| **`site_eng`** | `Eng@12345` | Site Engineer | Site tasks updates, Daily attendance recording, Material issue requests |
+| **`safety_dan`** | `Safe@12345` | Safety Officer | Safety inspections (5-factor score), Violations, Incident investigation |
+| **`inv_maria`** | `Inv@12345` | Inventory Manager | Material catalog, Reorder thresholds, Receipts & issues, Stock alerts |
+| **`equip_sam`** | `Equip@12345` | Equipment Manager | Machinery fleet tracking, Preventative maintenance scheduling |
+| **`contractor_apex`** | `Cont@12345` | Contractor | Subcontractor workforce overview, Assigned subcontractor tasks |
+| **`worker_bill`** | `Worker@12345` | Worker | My assigned tasks, Personal monthly attendance %, Safety issue reporting |
 
-*Security Policy: Minimum 8 characters, at least one letter and one number.*
+*All passwords meet strict enterprise security standards (hashed using BCrypt with cost factor 10).*
 
 ---
 
@@ -173,8 +172,9 @@ The test suite covers:
    - Public account access requests and password reset workflows.
 2. **User & Role Matrix Management**:
    - Full CRUD for users with instant status toggle (Active/Inactive).
-   - Dynamic permission matrix editor for all 8 roles across 46 permissions.
+   - Dynamic permission matrix editor for all 8 enterprise roles across 46 permissions.
    - Approval/rejection review workflow for registration requests.
+   - Comprehensive backend and database architectural guide in `docs/BACKEND_AND_DATABASE_GUIDE.md`.
 3. **Core Construction Operations**:
    - **Projects**: Budgets, milestone dates, progress tracking, and status transitions.
    - **Workforce**: Tradesmen directory, contractor assignments, contact information.

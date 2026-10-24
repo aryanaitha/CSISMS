@@ -1,15 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/api';
 import Modal from '../components/Modal';
 import FormField from '../components/FormField';
 
-const MODULES = [
-  'Projects', 'Workforce', 'Tasks', 'Attendance', 'Inventory',
-  'Equipment', 'Maintenance', 'Safety Inspections', 'Incidents', 'Reports & Audits'
-];
-
-const ROLES = [
+const NON_ADMIN_ROLES = [
   { value: 2, label: 'Project Manager' },
   { value: 3, label: 'Site Engineer' },
   { value: 4, label: 'Safety Officer' },
@@ -19,32 +14,128 @@ const ROLES = [
   { value: 8, label: 'Worker' }
 ];
 
+const MODULE_LIST = [
+  { name: 'Projects', desc: 'Track budgets, milestones, progress, and overall site delivery.' },
+  { name: 'Workforce', desc: 'Manage tradesmen, subcontractors, and site labor allocations.' },
+  { name: 'Tasks', desc: 'Coordinate site activities with priorities, stages, and deadlines.' },
+  { name: 'Attendance', desc: 'Daily worker check-ins, timekeeping, and presence verification.' },
+  { name: 'Inventory', desc: 'Material catalogs, reorder thresholds, receipts, and issues.' },
+  { name: 'Equipment', desc: 'Heavy machinery tracking, fleet allocation, and status monitoring.' },
+  { name: 'Maintenance', desc: 'Preventative servicing, repair scheduling, and work order tracking.' },
+  { name: 'Safety', desc: 'OSHA 5-factor inspections, hazard ratings, and compliance audits.' },
+  { name: 'Incidents', desc: 'Accident reporting, root cause investigation, and corrective action.' },
+  { name: 'Reports', desc: 'Real-time summaries, data previews, and RFC-4180 CSV exports.' }
+];
+
+const ROLE_NAMES = [
+  'Administrator',
+  'Project Manager',
+  'Site Engineer',
+  'Safety Officer',
+  'Inventory Manager',
+  'Equipment Manager',
+  'Contractor',
+  'Worker'
+];
+
+// Lightweight hook for scroll-triggered entrance animations
+function useInView(options = {}) {
+  const [inView, setInView] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (typeof IntersectionObserver === 'undefined') {
+      setInView(true);
+      return;
+    }
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setInView(true);
+        observer.disconnect();
+      }
+    }, { threshold: 0.15, ...options });
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return [ref, inView];
+}
+
+// Lightweight hook for single smooth number count-up (<800ms)
+function useCountUp(target, duration = 650, active = true) {
+  const [val, setVal] = useState(0);
+
+  useEffect(() => {
+    if (!active) return;
+    let startTime = null;
+    let frameId;
+
+    const step = (now) => {
+      if (!startTime) startTime = now;
+      const progress = Math.min((now - startTime) / duration, 1);
+      // Ease-out cubic
+      const current = Math.round((1 - Math.pow(1 - progress, 3)) * target);
+      setVal(current);
+      if (progress < 1) {
+        frameId = requestAnimationFrame(step);
+      } else {
+        setVal(target);
+      }
+    };
+
+    frameId = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frameId);
+  }, [target, duration, active]);
+
+  return val;
+}
+
 export default function Landing() {
   const navigate = useNavigate();
-  const [dbConnected, setDbConnected] = useState(null);
-  const [dbLoading, setDbLoading] = useState(true);
 
-  // Request Access Modal State
+  // Health Status
+  const [serverOnline, setServerOnline] = useState(null);
+  const [dbConnected, setDbConnected] = useState(null);
+  const [healthChecking, setHealthChecking] = useState(true);
+
+  // Request Access Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [reqFullName, setReqFullName] = useState('');
   const [reqEmail, setReqEmail] = useState('');
   const [reqUsername, setReqUsername] = useState('');
   const [reqRole, setReqRole] = useState(2);
   const [reqReason, setReqReason] = useState('');
-  const [reqStatus, setReqStatus] = useState(null); // { type: 'success'|'error', text: '' }
+  const [reqStatus, setReqStatus] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Scroll In-View Refs
+  const [modulesRef, modulesInView] = useInView();
+  const [rolesRef, rolesInView] = useInView();
+  const [previewRef, previewInView] = useInView();
+
+  // Animated Numbers for Live Preview Strip
+  const activeProjectsCount = useCountUp(3, 700, previewInView);
+  const openViolationsCount = useCountUp(1, 600, previewInView);
+  const lowStockCount = useCountUp(2, 650, previewInView);
 
   useEffect(() => {
     api.get('/health')
       .then((res) => {
+        setServerOnline(true);
         if (res && res.success && res.data && res.data.database === 'CONNECTED') {
           setDbConnected(true);
         } else {
           setDbConnected(false);
         }
       })
-      .catch(() => setDbConnected(false))
-      .finally(() => setDbLoading(false));
+      .catch(() => {
+        setServerOnline(false);
+        setDbConnected(false);
+      })
+      .finally(() => setHealthChecking(false));
   }, []);
 
   const handleRequestSubmit = async (e) => {
@@ -63,17 +154,16 @@ export default function Landing() {
 
       setReqStatus({
         type: 'success',
-        text: res.message || 'Request submitted successfully. An administrator will review it.'
+        text: res.message || 'Access request submitted. An administrator will review your submission.'
       });
 
-      // Reset form
       setReqFullName('');
       setReqEmail('');
       setReqUsername('');
       setReqReason('');
     } catch (err) {
       setReqStatus({
-        type: 'error',
+        type: 'danger',
         text: err.message || 'Failed to submit registration request'
       });
     } finally {
@@ -81,82 +171,182 @@ export default function Landing() {
     }
   };
 
+  const isSystemReady = dbConnected === true;
+
   return (
-    <div className="landing-container">
-      <div className="landing-card">
-        <h1 className="landing-title">
-          Construction Site Intelligence & Safety Management System
-        </h1>
-        <p className="landing-tagline">
-          Manage projects, people, materials, equipment and safety in one place.
-        </p>
-
-        {/* Database Status indicator */}
-        <div style={{ marginBottom: '1.5rem', textAlign: 'center' }}>
-          {dbLoading ? (
-            <span className="badge badge-secondary">Checking Database...</span>
-          ) : dbConnected ? (
-            <span className="badge badge-success">Database: Connected</span>
-          ) : (
-            <div>
-              <span className="badge badge-danger">Database: Not Connected</span>
-              <p style={{ color: 'var(--color-danger)', fontSize: '0.8rem', marginTop: '0.25rem' }}>
-                Please check database server and configuration in application.properties.
-              </p>
-            </div>
-          )}
+    <div className="landing-page">
+      {/* 1. Minimal Top Bar */}
+      <header className="landing-topbar">
+        <div className="landing-topbar-brand">
+          <span className="brand-logo-text">CSIMS</span>
+          <span className="brand-subtext">Construction Site Intelligence & Safety Management</span>
         </div>
-
-        {/* Key Modules section */}
-        <div className="landing-section">
-          <h3>Key Modules</h3>
-          <div className="modules-grid">
-            {MODULES.map((mod) => (
-              <div key={mod} className="module-item">
-                • {mod}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Who uses it section */}
-        <div className="landing-section">
-          <h3>Who uses it</h3>
-          <p className="roles-line">
-            Administrator, Project Manager, Site Engineer, Safety Officer, Inventory Manager, Equipment Manager, Contractor, Worker
-          </p>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="landing-actions">
+        <div className="landing-topbar-actions">
           <button
             className="btn btn-primary"
             onClick={() => navigate('/login')}
-            disabled={dbConnected === false}
+            disabled={!isSystemReady && !healthChecking}
           >
             Login
           </button>
           <button
             className="btn btn-secondary"
             onClick={() => setIsModalOpen(true)}
-            disabled={dbConnected === false}
           >
             Request Access
           </button>
-          <button
-            className="btn btn-secondary"
-            onClick={() => window.close()}
-          >
-            Exit
-          </button>
         </div>
+      </header>
 
-        <div className="landing-footer">
-          CSIMS v1.0 • Mini Project • Full-Stack Web Architecture
-        </div>
-      </div>
+      {/* 2. Hero Section */}
+      <main className="landing-content">
+        <section className="landing-hero">
+          <h1 className="hero-headline landing-anim-fade-up-1">
+            Manage projects, people, materials, equipment and safety in one place.
+          </h1>
+          <p className="hero-subtitle landing-anim-fade-up-2">
+            A high-performance intelligence and governance platform built for rigorous field coordination and real-time OSHA safety compliance.
+          </p>
 
-      {/* Request Access Modal */}
+          <div className="hero-actions landing-anim-fade-up-3">
+            <button
+              className="btn btn-primary btn-lg"
+              onClick={() => navigate('/login')}
+              disabled={!isSystemReady && !healthChecking}
+            >
+              Login to Platform
+            </button>
+            <button
+              className="btn btn-secondary btn-lg"
+              onClick={() => setIsModalOpen(true)}
+            >
+              Request Access
+            </button>
+          </div>
+
+          {/* Live System & DB Status Indicator */}
+          <div className="landing-status-bar landing-anim-fade-up-4">
+            <div className="status-indicator-group">
+              <span className={`status-dot ${serverOnline ? 'online' : healthChecking ? 'checking' : 'offline'}`} />
+              <span className="status-label">
+                Server: {healthChecking ? 'Checking...' : serverOnline ? 'Connected' : 'Not connected'}
+              </span>
+            </div>
+            <div className="status-indicator-group">
+              <span className={`status-dot ${dbConnected ? 'online' : healthChecking ? 'checking' : 'offline'}`} />
+              <span className="status-label">
+                Database: {healthChecking ? 'Checking...' : dbConnected ? 'Connected' : 'Not connected'}
+              </span>
+            </div>
+            {!healthChecking && !isSystemReady && (
+              <p className="status-alert-text">
+                Database connection unavailable. Please verify MySQL service and application.properties.
+              </p>
+            )}
+          </div>
+        </section>
+
+        {/* 3. Key Modules Grid */}
+        <section className="landing-section" ref={modulesRef}>
+          <div className="section-header">
+            <span className="section-eyebrow">Enterprise Architecture</span>
+            <h2 className="section-title">Key Operational Modules</h2>
+          </div>
+
+          <div className={`modules-grid ${modulesInView ? 'in-view' : ''}`}>
+            {MODULE_LIST.map((m, idx) => (
+              <div
+                key={m.name}
+                className="module-card"
+                style={{ '--anim-order': idx }}
+              >
+                <h3 className="module-name">{m.name}</h3>
+                <p className="module-desc">{m.desc}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* 4. Who Uses It: 8 Role Chips */}
+        <section className="landing-section" ref={rolesRef}>
+          <div className="section-header">
+            <span className="section-eyebrow">Role-Based Access Control</span>
+            <h2 className="section-title">Who Uses CSIMS</h2>
+          </div>
+
+          <div className={`roles-chip-row ${rolesInView ? 'in-view' : ''}`}>
+            {ROLE_NAMES.map((r, idx) => (
+              <span
+                key={r}
+                className="role-chip"
+                style={{ '--anim-order': idx }}
+              >
+                {r}
+              </span>
+            ))}
+          </div>
+        </section>
+
+        {/* 5. Mini Live Preview Strip (CSS Segmented Bar + Stat Cards) */}
+        <section className="landing-section" ref={previewRef}>
+          <div className="section-header">
+            <span className="section-eyebrow">Live Dashboard Intelligence</span>
+            <h2 className="section-title">Card Dashboard Preview</h2>
+          </div>
+
+          <div className={`preview-strip-container ${previewInView ? 'in-view' : ''}`}>
+            <div className="preview-stat-cards">
+              <div className="preview-stat-card">
+                <span className="preview-stat-label">Active Projects</span>
+                <div className="preview-stat-val-group">
+                  <span className="preview-stat-value">{activeProjectsCount}</span>
+                  <span className="preview-stat-unit">sites</span>
+                </div>
+              </div>
+
+              <div className="preview-stat-card">
+                <span className="preview-stat-label">Open Violations</span>
+                <div className="preview-stat-val-group">
+                  <span className="preview-stat-value">{openViolationsCount}</span>
+                  <span className="preview-stat-unit">item</span>
+                </div>
+              </div>
+
+              <div className="preview-stat-card">
+                <span className="preview-stat-label">Low Stock Items</span>
+                <div className="preview-stat-val-group">
+                  <span className="preview-stat-value">{lowStockCount}</span>
+                  <span className="preview-stat-unit">materials</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Segmented Progress Bar */}
+            <div className="preview-progress-box">
+              <div className="preview-progress-header">
+                <span className="preview-progress-title">Aggregate Project Execution</span>
+                <span className="preview-progress-pct">65%</span>
+              </div>
+              <div className="preview-segmented-bar">
+                {Array.from({ length: 20 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className={`progress-bar-segment ${previewInView && i < 13 ? 'segment-filled' : ''}`}
+                    style={{ '--segment-index': i }}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      {/* 6. Footer */}
+      <footer className="landing-footer">
+        <p>Construction Site Intelligence & Safety Management System &bull; v1.0.0 &bull; Mini Project</p>
+      </footer>
+
+      {/* Request Access Modal (Existing unchanged logic) */}
       <Modal
         isOpen={isModalOpen}
         onClose={() => {
@@ -167,7 +357,7 @@ export default function Landing() {
         maxWidth="480px"
       >
         {reqStatus && (
-          <div className={`alert alert-${reqStatus.type === 'success' ? 'success' : 'danger'}`}>
+          <div className={`alert alert-${reqStatus.type}`}>
             {reqStatus.text}
           </div>
         )}
@@ -179,7 +369,7 @@ export default function Landing() {
             value={reqFullName}
             onChange={(e) => setReqFullName(e.target.value)}
             required
-            placeholder="e.g. Jane Doe"
+            placeholder="e.g. David Ross"
           />
           <FormField
             label="Email Address"
@@ -188,7 +378,7 @@ export default function Landing() {
             value={reqEmail}
             onChange={(e) => setReqEmail(e.target.value)}
             required
-            placeholder="e.g. jane@company.com"
+            placeholder="e.g. david@contractor.com"
           />
           <FormField
             label="Desired Username"
@@ -196,7 +386,7 @@ export default function Landing() {
             value={reqUsername}
             onChange={(e) => setReqUsername(e.target.value)}
             required
-            placeholder="e.g. jane_doe"
+            placeholder="e.g. david_ross"
           />
           <FormField
             label="Requested Role"
@@ -204,7 +394,7 @@ export default function Landing() {
             type="select"
             value={reqRole}
             onChange={(e) => setReqRole(e.target.value)}
-            options={ROLES}
+            options={NON_ADMIN_ROLES}
             required
           />
           <FormField
@@ -214,10 +404,10 @@ export default function Landing() {
             value={reqReason}
             onChange={(e) => setReqReason(e.target.value)}
             required
-            placeholder="Explain why you require system access..."
+            placeholder="Describe your role on site or project requirements..."
           />
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '18px' }}>
             <button
               type="button"
               className="btn btn-secondary"

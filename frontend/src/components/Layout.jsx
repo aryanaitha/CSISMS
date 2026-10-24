@@ -11,7 +11,7 @@ export default function Layout() {
   const { user, logout, hasPermission, changePassword } = useAuth();
   const navigate = useNavigate();
 
-  // Idle session manager
+  // Idle session manager (15 min)
   useIdleTimer(() => {
     alert('Session expired due to 15 minutes of inactivity.');
     logout().then(() => navigate('/login'));
@@ -21,6 +21,7 @@ export default function Layout() {
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [changePwdOpen, setChangePwdOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
 
   // Notifications State
   const [unreadCount, setUnreadCount] = useState(0);
@@ -58,7 +59,7 @@ export default function Layout() {
 
   useEffect(() => {
     fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, 30000); // Poll every 30s
+    const interval = setInterval(fetchUnreadCount, 30000);
     return () => clearInterval(interval);
   }, [user]);
 
@@ -131,82 +132,69 @@ export default function Layout() {
     { label: 'Inventory', path: '/inventory', show: hasPermission('INVENTORY_VIEW') },
     { label: 'Equipment', path: '/equipment', show: hasPermission('EQUIPMENT_VIEW') },
     { label: 'Maintenance', path: '/maintenance', show: hasPermission('MAINTENANCE_VIEW') },
-    { label: 'Safety Inspections', path: '/safety', show: hasPermission('SAFETY_INSPECTION_VIEW') || hasPermission('SAFETY_VIOLATION_VIEW') },
+    { label: 'Safety', path: '/safety', show: hasPermission('SAFETY_INSPECTION_VIEW') || hasPermission('SAFETY_VIOLATION_VIEW') },
     { label: 'Incidents', path: '/incidents', show: hasPermission('INCIDENT_VIEW') },
     { label: 'Reports', path: '/reports', show: hasPermission('REPORT_VIEW') },
-    { label: 'Audit Log', path: '/audit-logs', show: hasPermission('AUDIT_VIEW') },
-    { label: 'User Management', path: '/users', show: hasPermission('USER_VIEW') },
-    { label: 'Roles & Permissions', path: '/roles', show: hasPermission('ROLE_VIEW') },
-    { label: 'Account Requests', path: '/account-requests', show: hasPermission('ACCOUNT_REQUEST_VIEW') }
+    { label: 'Audit Logs', path: '/audit-logs', show: hasPermission('AUDIT_VIEW') },
+    { label: 'Users', path: '/users', show: hasPermission('USER_VIEW') },
+    { label: 'Roles', path: '/roles', show: hasPermission('ROLE_VIEW') },
+    { label: 'Requests', path: '/account-requests', show: hasPermission('ACCOUNT_REQUEST_VIEW') }
   ];
 
   return (
     <div className="app-shell">
       {/* Topbar */}
       <header className="topbar">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <h1 className="brand-title">CSIMS</h1>
-          <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
-            Construction Site Intelligence
+        <div className="topbar-left">
+          <span className="brand-pill">CSIMS</span>
+          <span className="topbar-user-info">
+            Logged in as <strong>{user?.fullName || user?.username}</strong> ({user?.roleName})
           </span>
         </div>
 
-        <div className="topbar-actions">
-          {/* Notification Button */}
+        <div className="topbar-right">
+          {/* Notification Button with Pill Count */}
           <button
+            type="button"
             className="btn btn-secondary btn-sm"
             onClick={handleOpenNotifications}
-            style={{ position: 'relative' }}
             title="Notifications"
           >
             Notifications
             {unreadCount > 0 && (
-              <span
-                style={{
-                  background: 'var(--color-danger)',
-                  color: '#fff',
-                  borderRadius: '10px',
-                  padding: '2px 6px',
-                  fontSize: '0.7rem',
-                  marginLeft: '0.4rem',
-                  fontWeight: 'bold'
-                }}
-              >
+              <span className="pill pill-teal" style={{ marginLeft: '6px' }}>
                 {unreadCount}
               </span>
             )}
           </button>
 
-          {/* User profile & role badge */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>
-              {user?.fullName || user?.username}
-            </span>
-            <span className="badge badge-primary">{user?.roleName}</span>
-          </div>
-
-          {/* Change Password */}
+          {/* Change Password Button */}
           <button
+            type="button"
             className="btn btn-secondary btn-sm"
             onClick={() => {
               setChangePwdOpen(true);
               setPwdMsg(null);
             }}
+            title="Change Password"
           >
             Change Password
           </button>
 
-          {/* Logout */}
+          {/* Direct Sign Out Button */}
           <button
+            type="button"
             className="btn btn-secondary btn-sm"
+            style={{ color: '#9c2828' }}
             onClick={() => setLogoutConfirmOpen(true)}
+            title="Sign Out"
           >
-            Logout
+            Sign Out
           </button>
         </div>
       </header>
 
-      {/* Main Body with Sidebar + Outlet */}
+      {/* Main Body with Narrow Text-Only Sidebar + Outlet */}
       <div className="main-wrapper">
         <aside className="sidebar">
           <nav className="nav-menu">
@@ -235,9 +223,9 @@ export default function Layout() {
           await logout();
           navigate('/login');
         }}
-        title="Confirm Logout"
-        message="Are you sure you want to end your current session and log out?"
-        confirmText="Log Out"
+        title="Confirm Sign Out"
+        message="Are you sure you want to end your current session and sign out?"
+        confirmText="Sign Out"
       />
 
       {/* Change Password Modal */}
@@ -283,7 +271,7 @@ export default function Layout() {
             required
           />
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1.25rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px' }}>
             <button
               type="button"
               className="btn btn-secondary"
@@ -301,7 +289,7 @@ export default function Layout() {
         </form>
       </Modal>
 
-      {/* Notifications Drawer/Modal */}
+      {/* Notifications Modal */}
       <Modal
         isOpen={notifOpen}
         onClose={() => setNotifOpen(false)}
@@ -319,41 +307,43 @@ export default function Layout() {
         }
       >
         {notifications.length === 0 ? (
-          <p style={{ color: 'var(--color-text-muted)', textAlign: 'center', margin: '2rem 0' }}>
+          <p style={{ color: 'var(--muted)', textAlign: 'center', margin: '24px 0' }}>
             No notifications found.
           </p>
         ) : (
-          <div style={{ maxHeight: '360px', overflowY: 'auto' }}>
+          <div style={{ maxHeight: '360px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {notifications.map((n) => (
               <div
                 key={n.id}
                 style={{
-                  padding: '0.75rem',
-                  borderBottom: '1px solid var(--color-border)',
-                  backgroundColor: n.readStatus ? 'transparent' : 'var(--color-table-zebra)',
+                  padding: '12px 14px',
+                  borderRadius: '12px',
+                  border: '1px solid var(--border)',
+                  background: n.readStatus ? 'transparent' : 'var(--accent-soft)',
                   display: 'flex',
                   justifyContent: 'space-between',
-                  alignItems: 'flex-start'
+                  alignItems: 'flex-start',
+                  gap: '12px'
                 }}
               >
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
-                    <span className={`badge badge-${n.type === 'DANGER' ? 'danger' : n.type === 'WARNING' ? 'warning' : 'primary'}`}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <span className="pill pill-neutral">
                       {n.type}
                     </span>
-                    <strong style={{ fontSize: '0.9rem' }}>{n.title}</strong>
+                    <strong style={{ fontSize: '13px' }}>{n.title}</strong>
                   </div>
-                  <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--color-text)' }}>
+                  <p style={{ margin: 0, fontSize: '12px', color: 'var(--text)' }}>
                     {n.message}
                   </p>
-                  <small style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
+                  <small style={{ color: 'var(--muted)', fontSize: '11px' }}>
                     {n.createdAt ? new Date(n.createdAt).toLocaleString() : ''}
                   </small>
                 </div>
                 {!n.readStatus && (
                   <button
                     className="btn btn-secondary btn-sm"
-                    style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                    style={{ fontSize: '11px', padding: '3px 8px' }}
                     onClick={() => handleMarkAsRead(n.id)}
                   >
                     Read

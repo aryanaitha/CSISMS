@@ -11,6 +11,15 @@ export default function ConfirmDialog({
   cancelText = 'Cancel',
   danger = false
 }) {
+  const handleConfirm = async () => {
+    if (onConfirm) {
+      await onConfirm();
+    }
+    if (onClose) {
+      onClose();
+    }
+  };
+
   return (
     <Modal
       isOpen={isOpen}
@@ -19,22 +28,20 @@ export default function ConfirmDialog({
       maxWidth="420px"
       footer={
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', width: '100%' }}>
-          <button className="btn btn-secondary" onClick={onClose}>
+          <button type="button" className="btn btn-secondary" onClick={onClose}>
             {cancelText}
           </button>
           <button
+            type="button"
             className={`btn ${danger ? 'btn-danger' : 'btn-primary'}`}
-            onClick={() => {
-              onConfirm();
-              onClose();
-            }}
+            onClick={handleConfirm}
           >
             {confirmText}
           </button>
         </div>
       }
     >
-      <p style={{ margin: 0, color: 'var(--color-text)' }}>{message}</p>
+      <p style={{ margin: 0, color: 'var(--text)' }}>{message}</p>
     </Modal>
   );
 }

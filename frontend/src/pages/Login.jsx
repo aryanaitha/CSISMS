@@ -18,6 +18,7 @@ export default function Login() {
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [dbConnected, setDbConnected] = useState(null);
 
   // Forgot Password modal state
   const [forgotModalOpen, setForgotModalOpen] = useState(false);
@@ -29,7 +30,18 @@ export default function Login() {
   const passwordRef = useRef(null);
 
   useEffect(() => {
-    // If already authenticated and doesn't need password change, navigate to dashboard
+    api.get('/health')
+      .then((res) => {
+        if (res && res.success && res.data && res.data.database === 'CONNECTED') {
+          setDbConnected(true);
+        } else {
+          setDbConnected(false);
+        }
+      })
+      .catch(() => setDbConnected(false));
+  }, []);
+
+  useEffect(() => {
     if (user && !user.mustChangePassword) {
       const destination = location.state?.from?.pathname || '/dashboard';
       navigate(destination, { replace: true });
@@ -37,7 +49,6 @@ export default function Login() {
   }, [user, navigate, location]);
 
   useEffect(() => {
-    // Check remembered username
     const savedUsername = localStorage.getItem(REMEMBER_KEY);
     if (savedUsername) {
       setUsername(savedUsername);
@@ -82,12 +93,12 @@ export default function Login() {
       const res = await api.post('/auth/forgot-password', { usernameOrEmail: forgotInput });
       setForgotMsg({
         type: 'success',
-        text: res.message || 'If an account with that username or email exists, a reset request has been submitted to administrators.'
+        text: res.message || 'If an account with that username or email exists, a reset request has been submitted.'
       });
       setForgotInput('');
     } catch (err) {
       setForgotMsg({
-        type: 'error',
+        type: 'danger',
         text: err.message || 'Error submitting password reset request'
       });
     } finally {
@@ -96,54 +107,59 @@ export default function Login() {
   };
 
   return (
-    <div className="login-container">
-      <div className="login-card">
-        <h2 className="login-title">Sign In to CSIMS</h2>
-        <p className="login-subtitle">
+    <div className="centered-auth-container">
+      <div className="centered-card">
+        <h1 className="auth-title">Sign In</h1>
+        <p className="auth-tagline">
           Construction Site Intelligence & Safety Management System
         </p>
 
+        {/* Small connected / not connected text */}
+        <div style={{ marginBottom: '16px' }}>
+          {dbConnected === null ? (
+            <span style={{ fontSize: '12px', color: 'var(--muted)' }}>Checking database...</span>
+          ) : dbConnected ? (
+            <span style={{ fontSize: '12px', color: '#1b7a42' }}>Database: Connected</span>
+          ) : (
+            <span style={{ fontSize: '12px', color: '#9c2828' }}>Database: Not connected</span>
+          )}
+        </div>
+
         {error && (
-          <div className="alert alert-danger" style={{ marginBottom: '1.25rem' }}>
+          <div className="alert alert-danger">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleLogin}>
+        <form onSubmit={handleLogin} style={{ textAlign: 'left' }}>
           <div className="form-group">
-            <label className="form-label" htmlFor="username">
-              Username or Email
-            </label>
+            <label className="form-label" htmlFor="username">Username or Email</label>
             <input
               id="username"
               ref={usernameRef}
               type="text"
-              className="form-input"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="Enter your username or email"
+              placeholder="Username or email"
               required
             />
           </div>
 
           <div className="form-group">
-            <label className="form-label" htmlFor="password">
-              Password
-            </label>
+            <label className="form-label" htmlFor="password">Password</label>
             <input
               id="password"
               ref={passwordRef}
               type={showPassword ? 'text' : 'password'}
-              className="form-input"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter your password"
+              placeholder="Password"
               required
             />
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', cursor: 'pointer' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', fontSize: '12px', color: 'var(--muted)' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', margin: 0 }}>
               <input
                 type="checkbox"
                 checked={showPassword}
@@ -152,37 +168,36 @@ export default function Login() {
               Show password
             </label>
 
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', cursor: 'pointer' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', margin: 0 }}>
               <input
                 type="checkbox"
                 checked={rememberMe}
                 onChange={(e) => setRememberMe(e.target.checked)}
               />
-              Remember username
+              Remember me
             </label>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <div className="auth-actions" style={{ flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={loading}
-              style={{ width: '100%', justifyContent: 'center' }}
+              disabled={loading || dbConnected === false}
+              style={{ width: '100%' }}
             >
-              {loading ? 'Authenticating...' : 'Login'}
+              {loading ? 'Authenticating...' : 'Sign In'}
             </button>
-
             <button
               type="button"
               className="btn btn-secondary"
               onClick={() => navigate('/')}
-              style={{ width: '100%', justifyContent: 'center' }}
+              style={{ width: '100%' }}
             >
-              Back to Home
+              Back
             </button>
           </div>
 
-          <div style={{ marginTop: '1.25rem', textAlign: 'center' }}>
+          <div style={{ marginTop: '16px', textAlign: 'center' }}>
             <button
               type="button"
               onClick={() => {
@@ -192,10 +207,10 @@ export default function Login() {
               style={{
                 background: 'none',
                 border: 'none',
-                color: 'var(--color-primary)',
+                color: 'var(--accent)',
                 cursor: 'pointer',
-                fontSize: '0.85rem',
-                textDecoration: 'underline'
+                fontSize: '12px',
+                padding: 0
               }}
             >
               Forgot password?
@@ -214,12 +229,12 @@ export default function Login() {
         title="Reset Password Request"
         maxWidth="440px"
       >
-        <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', marginBottom: '1rem' }}>
-          Enter your username or registered email address. An administrator will review your reset request and provide a temporary password.
+        <p style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '14px' }}>
+          Enter your username or email address. An administrator will review your request.
         </p>
 
         {forgotMsg && (
-          <div className={`alert alert-${forgotMsg.type === 'success' ? 'success' : 'danger'}`}>
+          <div className={`alert alert-${forgotMsg.type}`}>
             {forgotMsg.text}
           </div>
         )}
@@ -231,10 +246,10 @@ export default function Login() {
             value={forgotInput}
             onChange={(e) => setForgotInput(e.target.value)}
             required
-            placeholder="e.g. jdoe or jdoe@csims.local"
+            placeholder="e.g. admin or admin@csims.local"
           />
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1.25rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px' }}>
             <button
               type="button"
               className="btn btn-secondary"

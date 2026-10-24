@@ -27,28 +27,28 @@ public class RbacIntegrationTest {
     private ObjectMapper objectMapper;
 
     @Test
-    @DisplayName("User with USER_VIEW authority can access /api/users")
+    @DisplayName("Admin / User with USER_VIEW authority can access /api/users")
     @WithMockUser(authorities = {"USER_VIEW"})
-    void userWithPermissionAllowed() throws Exception {
+    void adminWithPermissionAllowed() throws Exception {
         mockMvc.perform(get("/api/users"))
                 .andExpect(status().isOk());
     }
 
     @Test
-    @DisplayName("User lacking USER_VIEW authority is rejected with 403 Forbidden")
-    @WithMockUser(authorities = {"WORKER_ONLY"})
-    void userWithoutPermissionForbidden() throws Exception {
-        mockMvc.perform(get("/api/users"))
+    @DisplayName("Project Manager is denied access to Audit Logs (AUDIT_VIEW - 403 Forbidden)")
+    @WithMockUser(authorities = {"PROJECT_VIEW", "PROJECT_CREATE", "WORKFORCE_VIEW", "TASK_VIEW"})
+    void projectManagerDeniedAuditLogs() throws Exception {
+        mockMvc.perform(get("/api/audit-logs"))
                 .andExpect(status().isForbidden());
     }
 
     @Test
-    @DisplayName("User without PROJECT_CREATE cannot create a project (403 Forbidden)")
-    @WithMockUser(authorities = {"PROJECT_VIEW"})
-    void unauthorizedProjectCreationForbidden() throws Exception {
+    @DisplayName("Site Engineer is denied access to Create Projects (PROJECT_CREATE - 403 Forbidden)")
+    @WithMockUser(authorities = {"PROJECT_VIEW", "WORKFORCE_VIEW", "TASK_VIEW", "TASK_UPDATE", "ATTENDANCE_RECORD"})
+    void siteEngineerDeniedProjectCreation() throws Exception {
         Map<String, Object> projectData = Map.of(
-                "name", "Unauthorized Sky Tower",
-                "status", "PLANNED"
+                "projectName", "Unauthorized Bridge Project",
+                "status", "Planning"
         );
 
         mockMvc.perform(post("/api/projects")
@@ -58,10 +58,79 @@ public class RbacIntegrationTest {
     }
 
     @Test
-    @DisplayName("User without AUDIT_VIEW authority cannot view audit trail (403 Forbidden)")
-    @WithMockUser(authorities = {"PROJECT_VIEW", "TASK_VIEW"})
-    void unauthorizedAuditAccessForbidden() throws Exception {
-        mockMvc.perform(get("/api/audit-logs"))
+    @DisplayName("Safety Officer is denied access to Issue Inventory (INVENTORY_ISSUE - 403 Forbidden)")
+    @WithMockUser(authorities = {"PROJECT_VIEW", "SAFETY_INSPECTION_CREATE", "SAFETY_VIOLATION_CREATE", "INCIDENT_VIEW"})
+    void safetyOfficerDeniedInventoryIssue() throws Exception {
+        Map<String, Object> movement = Map.of(
+                "materialId", 1,
+                "quantity", 10,
+                "projectId", 1
+        );
+
+        mockMvc.perform(post("/api/inventory/issue")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(movement)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Inventory Manager is denied access to Create Projects (PROJECT_CREATE - 403 Forbidden)")
+    @WithMockUser(authorities = {"PROJECT_VIEW", "INVENTORY_VIEW", "INVENTORY_RECEIPT", "INVENTORY_ISSUE"})
+    void inventoryManagerDeniedProjectCreation() throws Exception {
+        Map<String, Object> projectData = Map.of(
+                "projectName", "Unauthorized Warehouse Project",
+                "status", "Planning"
+        );
+
+        mockMvc.perform(post("/api/projects")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(projectData)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Equipment Manager is denied access to Create Workers (WORKFORCE_CREATE - 403 Forbidden)")
+    @WithMockUser(authorities = {"PROJECT_VIEW", "EQUIPMENT_VIEW", "EQUIPMENT_CREATE", "MAINTENANCE_SCHEDULE"})
+    void equipmentManagerDeniedWorkerCreation() throws Exception {
+        Map<String, Object> workerData = Map.of(
+                "fullName", "Unauthorized Worker",
+                "trade", "Welder"
+        );
+
+        mockMvc.perform(post("/api/workforce/workers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(workerData)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Contractor is denied access to User Management (USER_VIEW - 403 Forbidden)")
+    @WithMockUser(authorities = {"PROJECT_VIEW", "WORKFORCE_VIEW", "TASK_VIEW", "TASK_UPDATE"})
+    void contractorDeniedUserManagement() throws Exception {
+        mockMvc.perform(get("/api/users"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Worker is denied access to User Management (USER_VIEW - 403 Forbidden)")
+    @WithMockUser(authorities = {"TASK_VIEW", "TASK_UPDATE", "ATTENDANCE_VIEW"})
+    void workerDeniedUserManagement() throws Exception {
+        mockMvc.perform(get("/api/users"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Worker is denied access to Create Projects (PROJECT_CREATE - 403 Forbidden)")
+    @WithMockUser(authorities = {"TASK_VIEW", "TASK_UPDATE", "ATTENDANCE_VIEW"})
+    void workerDeniedProjectCreation() throws Exception {
+        Map<String, Object> projectData = Map.of(
+                "projectName", "Unauthorized Tower Project",
+                "status", "Planning"
+        );
+
+        mockMvc.perform(post("/api/projects")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(projectData)))
                 .andExpect(status().isForbidden());
     }
 }

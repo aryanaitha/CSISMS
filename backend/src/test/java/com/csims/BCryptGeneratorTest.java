@@ -9,8 +9,8 @@ public class BCryptGeneratorTest {
     void generateHashes() {
         BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
         String[] passwords = {
-            "Admin@123", "Admin@1234", "Pm@12345", "Eng@12345", "Safe@12345",
-            "Inv@12345", "Equip@12345", "Cont@12345", "Worker@12345", "Reset@12345"
+            "Admin@123", "Pm@12345", "Eng@12345", "Safe@12345",
+            "Inv@12345", "Equip@12345", "Cont@12345", "Worker@12345"
         };
         for (String p : passwords) {
             System.out.println("BCRYPT:" + p + " -> " + encoder.encode(p));

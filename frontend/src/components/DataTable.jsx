@@ -42,14 +42,13 @@ export default function DataTable({
   };
 
   return (
-    <div className="data-table-container">
+    <div className="card table-card">
       {(searchable || actions) && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', gap: '1rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '12px', flexWrap: 'wrap' }}>
           {searchable ? (
             <input
               type="text"
-              className="form-input"
-              style={{ maxWidth: '300px' }}
+              style={{ maxWidth: '280px' }}
               placeholder={searchPlaceholder}
               value={search}
               onChange={handleSearchChange}
@@ -60,7 +59,7 @@ export default function DataTable({
         </div>
       )}
 
-      <div style={{ overflowX: 'auto', border: '1px solid var(--color-border)', borderRadius: '4px' }}>
+      <div className="table-wrapper">
         <table className="table">
           <thead>
             <tr>
@@ -74,7 +73,7 @@ export default function DataTable({
           <tbody>
             {paginatedData.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-text-muted)' }}>
+                <td colSpan={columns.length} style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--muted)' }}>
                   {emptyMessage}
                 </td>
               </tr>
@@ -97,12 +96,12 @@ export default function DataTable({
       </div>
 
       {totalPages > 1 && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', fontSize: '0.875rem' }}>
-          <span style={{ color: 'var(--color-text-muted)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', fontSize: '12px' }}>
+          <span style={{ color: 'var(--muted)' }}>
             Showing {Math.min(filteredData.length, (currentPage - 1) * pageSize + 1)} to {Math.min(filteredData.length, currentPage * pageSize)} of {filteredData.length} records
           </span>
 
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <button
               className="btn btn-secondary btn-sm"
               disabled={currentPage === 1}
@@ -110,7 +109,7 @@ export default function DataTable({
             >
               Previous
             </button>
-            <span>
+            <span style={{ color: 'var(--muted)' }}>
               Page {currentPage} of {totalPages}
             </span>
             <button
