@@ -1,6 +1,7 @@
 package com.csims.service;
 
 import com.csims.exception.ApiException;
+import com.csims.model.Incident;
 import com.csims.model.SafetyInspection;
 import com.csims.model.SafetyViolation;
 import com.csims.repository.SafetyRepository;
@@ -13,6 +14,10 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
 
+/**
+ * Consolidated Safety & Compliance Service.
+ * Covers Safety Inspections, Hazard Violations, and Incident Reports.
+ */
 @Service
 public class SafetyService {
     private final SafetyRepository safetyRepository;
@@ -26,6 +31,10 @@ public class SafetyService {
         this.auditService = auditService;
         this.notificationService = notificationService;
     }
+
+    // =========================================================================
+    // SECTION 1: SAFETY INSPECTIONS
+    // =========================================================================
 
     public List<SafetyInspection> getAllInspections(Integer projectId) {
         return safetyRepository.findAllInspections(projectId);
@@ -57,6 +66,10 @@ public class SafetyService {
         return id;
     }
 
+    // =========================================================================
+    // SECTION 2: SAFETY VIOLATIONS
+    // =========================================================================
+
     public List<SafetyViolation> getAllViolations(Integer projectId, String status, String severity) {
         return safetyRepository.findAllViolations(projectId, status, severity);
     }
@@ -84,5 +97,40 @@ public class SafetyService {
         }
         safetyRepository.updateViolation(sv);
         auditService.log(operatorId, operatorUsername, null, "SAFETY_VIOLATION_UPDATE", "SAFETY", "SAFETY_VIOLATION", String.valueOf(id), existing.getStatus(), sv.getStatus(), "SUCCESS", "Updated safety violation #" + id + " status to " + sv.getStatus());
+    }
+
+    // =========================================================================
+    // SECTION 3: INCIDENTS
+    // =========================================================================
+
+    public List<Incident> getAllIncidents(Integer projectId, String severity, String status) {
+        return safetyRepository.findAllIncidents(projectId, severity, status);
+    }
+
+    public Incident getIncidentById(Integer id) {
+        return safetyRepository.findIncidentById(id)
+                .orElseThrow(() -> new ApiException("Incident report not found with ID " + id, HttpStatus.NOT_FOUND));
+    }
+
+    @Transactional
+    public Integer reportIncident(Incident inc, Long reporterId, String reporterUsername) {
+        inc.setReportedBy(reporterId);
+        Integer id = safetyRepository.createIncident(inc);
+        auditService.log(reporterId, reporterUsername, null, "INCIDENT_REPORT", "INCIDENT", "INCIDENT", String.valueOf(id), null, inc.getSeverity(), "SUCCESS", "Reported " + inc.getSeverity() + " incident: " + inc.getTitle());
+
+        // High priority broadcast alert if FATALITY or INJURY
+        if ("FATALITY".equalsIgnoreCase(inc.getSeverity()) || "INJURY".equalsIgnoreCase(inc.getSeverity())) {
+            notificationService.notify(reporterId, "EMERGENCY: " + inc.getSeverity() + " Reported!", "Accident reported at project #" + inc.getProjectId() + ": " + inc.getTitle() + ". Immediate response required.", "DANGER", "/incidents");
+        }
+
+        return id;
+    }
+
+    @Transactional
+    public void updateIncident(Integer id, Incident inc, Long operatorId, String operatorUsername) {
+        Incident existing = getIncidentById(id);
+        inc.setId(id);
+        safetyRepository.updateIncident(inc);
+        auditService.log(operatorId, operatorUsername, null, "INCIDENT_UPDATE", "INCIDENT", "INCIDENT", String.valueOf(id), existing.getStatus(), inc.getStatus(), "SUCCESS", "Updated incident #" + id + " to " + inc.getStatus());
     }
 }
