@@ -20,8 +20,8 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
-    @ExceptionHandler(ApiException.class)
-    public ResponseEntity<ApiResponse<Void>> handleApiException(ApiException e) {
+    @ExceptionHandler(AppExceptions.ApiException.class)
+    public ResponseEntity<ApiResponse<Void>> handleApiException(AppExceptions.ApiException e) {
         log.warn("API Exception: {}", e.getMessage());
         return ResponseEntity.status(e.getStatus()).body(ApiResponse.error(e.getMessage()));
     }
