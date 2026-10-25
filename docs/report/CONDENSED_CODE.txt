@@ -1,0 +1,693 @@
+Construction Site Intelligence & Safety Management System (CSIMS) - Backend Code Listing
+Technology Stack: Java 17, Spring Boot 3, Spring JdbcTemplate / JDBC, MySQL 8
+Architecture: 3-Tier Layered REST API (Controllers, Services, Repositories, Models/DTOs)
+Security: Spring Security, Cookie Session (JSESSIONID), BCrypt, Method-Level RBAC
+Condensed listing for report - omitted code is marked with ... or comments
+
+1. Application Entry Point
+package com.csims;
+
+@SpringBootApplication
+public class CsimsApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(CsimsApplication.class, args);
+    }
+}
+
+2. Security Configuration and Access Control
+package com.csims.config;
+
+@Configuration @EnableWebSecurity @EnableMethodSecurity
+public class SecurityConfig implements WebMvcConfigurer {
+    @Bean public PasswordEncoder passwordEncoder() { return new BCryptPasswordEncoder(); }
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        return http.cors(c -> c.configurationSource(corsConfigurationSource()))
+            .csrf(c -> c.disable())
+            .exceptionHandling(e -> e.authenticationEntryPoint((req, res, ex) -> {
+                res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                res.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                res.getWriter().write("{"success":false,"message":"Authentication required"}");
+            }))
+            .sessionManagement(s -> s.sessionFixation().changeSessionId().maximumSessions(1))
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/", "/index.html", "/api/auth/login",
+                    "/api/auth/register-request", "/api/auth/forgot-password",
+                    "/api/health", "/swagger-ui.html").permitAll()
+                .requestMatchers("/api/*").authenticated().anyRequest().permitAll())
+            .build();
+    }
+}
+
+package com.csims.security;
+@Service
+public class CustomUserDetailsService implements UserDetailsService {
+    public UserDetails loadUserByUsername(String val) {
+        User u = userRepository.findByUsernameOrEmail(val)
+            .orElseThrow(() -> new UsernameNotFoundException("Not found: " + val));
+        return new CustomUserDetails(u, userRepository.findPermissionNamesByRoleId(u.getRoleId()));
+    }
+}
+
+3. Domain Models and Entity Schema
+package com.csims.model;
+
+public class Models {
+    // Identity & RBAC Entities (fields only; getters/setters omitted)
+    public static class User { Long id; String username, email, passwordHash, fullName, roleName;
+        Integer roleId; boolean active, mustChangePassword; int failedLoginAttempts;
+        LocalDateTime lockedUntil, lastLogin; }
+    public static class Role { Integer id; String name, description; }
+    public static class Permission { Integer id; String name, module, description; }
+    public static class AccountRequest { Long id; String fullName, email, username,
+        requestedRoleName, reason, status, requestType; Integer requestedRoleId; Long reviewedBy; }
+
+    // Core Construction Entities
+    public static class Project { Integer id; String projectName, description, location, status;
+        LocalDate startDate, endDate; BigDecimal budget; int progressPercent; }
+    public static class Contractor { Integer id; String companyName, contactPerson, phone, email; }
+    public static class Worker { Integer id, contractorId; String fullName, trade, phone, status; }
+    public static class Task { Integer id, projectId, assignedWorkerId; String title, status,
+        priority; int completionPercent; LocalDate dueDate; }
+    public static class Attendance { Integer id, projectId, workerId; String status, remarks;
+        LocalDate attendanceDate; LocalTime checkInTime, checkOutTime; Long recordedBy; }
+
+    // Inventory, Fleet, Safety & System Entities
+    public static class Material { Integer id; String materialCode, name, category, unit;
+        BigDecimal quantityOnHand, minStock, maxStock, unitPrice; }
+    public static class InventoryTransaction { Long id; Integer materialId, projectId;
+        String transactionType, referenceNo, remarks; BigDecimal quantity; Long performedBy; }
+    public static class Equipment { Integer id; String equipmentCode, name, category, status;
+        LocalDate lastServiceDate, nextServiceDue; Integer daysUntilDue; }
+    public static class MaintenanceRecord { Integer id, equipmentId; String maintenanceType,
+        status, remarks; LocalDate scheduledDate, completedDate; BigDecimal cost; }
+    public static class SafetyInspection { Integer id, projectId; Long inspectorId;
+        LocalDate inspectionDate; int ppeScore, workerSafetyScore, equipmentScore, workAreaScore,
+        emergencyScore; BigDecimal overallScore; String notes; }
+    public static class SafetyViolation { Integer id, projectId; String severity, description,
+        correctiveAction, status; Long reportedBy; LocalDate violationDate, resolutionDate; }
+    public static class Incident { Integer id, projectId; String severity, title, description,
+        injuredPerson, rootCause, status; Long reportedBy; LocalDate incidentDate; }
+    public static class AuditLog { Long id, userId; String username, role, action, module,
+        entityType, entityId, oldValue, newValue, status, description; LocalDateTime createdAt; }
+    public static class Notification { Long id, userId; String title, message, type, link;
+        boolean readStatus; LocalDateTime createdAt; }
+}
+
+4. Data Transfer Objects (DTOs) and API Response Format
+package com.csims.dto;
+
+public class ApiResponse<T> {
+    private boolean success; private String message; private T data; private String error, code;
+    private LocalDateTime timestamp = LocalDateTime.now();
+    public static <T> ApiResponse<T> ok(T d) {
+        return new ApiResponse<>(true, null, d, null, null);
+    }
+    public static <T> ApiResponse<T> success(String m, T d) {
+        return new ApiResponse<>(true, m, d, null, null);
+    }
+    public static <T> ApiResponse<T> error(String e) {
+        return new ApiResponse<>(false, null, null, e, null);
+    }
+}
+
+package com.csims.dto;
+public class Dtos {
+    public static class LoginRequest { @NotBlank String username, password; }
+    public static class RegisterRequestDto { @NotBlank String fullName, email, username;
+        Integer requestedRoleId; String reason; }
+    public static class ChangePasswordRequest { @NotBlank String oldPassword, newPassword; }
+    public static class UserDto { Long id; String username, email, fullName, roleName;
+        Integer roleId; boolean active, mustChangePassword; Set<String> permissions; }
+    public static class ReportResultDto { String reportTitle; List<String> headers;
+        List<List<String>> rows; }
+}
+
+5. Custom Exceptions and Global Exception Handler
+package com.csims.exception;
+
+public class AppExceptions {
+    public static class ApiException extends RuntimeException {
+        private final HttpStatus status;
+        public ApiException(String m, HttpStatus s) { super(m); this.status = s; }
+        public HttpStatus getStatus() { return status; }
+    }
+    public static class NotFoundException extends ApiException {
+        public NotFoundException(String m) { super(m, HttpStatus.NOT_FOUND); }
+    }
+}
+
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+    @ExceptionHandler(AppExceptions.ApiException.class)
+    public ResponseEntity<ApiResponse<Void>> handleApiException(AppExceptions.ApiException e) {
+        return ResponseEntity.status(e.getStatus()).body(ApiResponse.error(e.getMessage()));
+    }
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDenied(AccessDeniedException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error(
+            "Access denied: You do not have permission to perform this action."));
+    }
+    @ExceptionHandler({BadCredentialsException.class, LockedException.class})
+    public ResponseEntity<ApiResponse<Void>> handleAuthFailures(Exception e) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+            .body(ApiResponse.error(e.getMessage()));
+    }
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiResponse<Void>> handleValidation(MethodArgumentNotValidException e) {
+        String msg = e.getBindingResult().getFieldErrors().stream()
+            .map(FieldError::getDefaultMessage).collect(Collectors.joining("; "));
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(msg));
+    }
+}
+
+6. Utility Classes
+package com.csims.util;
+
+public final class Utils {
+    private Utils() {}
+
+    // RFC-4180 Compliant CSV Generation with UTF-8 byte stream output
+    public static byte[] generateCsv(List<String> headers, List<List<String>> rows)
+            throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try (PrintWriter w = new PrintWriter(
+                new OutputStreamWriter(baos, StandardCharsets.UTF_8))) {
+            if (headers != null && !headers.isEmpty()) w.println(toCsvRow(headers));
+            if (rows != null) { for (List<String> r : rows) w.println(toCsvRow(r)); }
+            w.flush();
+        }
+        return baos.toByteArray();
+    }
+
+    private static String toCsvRow(List<String> cols) {
+        return cols.stream().map(Utils::escapeCsv).collect(Collectors.joining(","));
+    }
+
+    private static String escapeCsv(String v) {
+        if (v == null) return """";
+        return """ + v.replace(""", """") + """;
+    }
+}
+
+7. Repositories (Spring JdbcTemplate and Query Catalog)
+package com.csims.repository;
+
+@Repository
+public class UserRepository {
+    private final JdbcTemplate jdbcTemplate;
+    public UserRepository(JdbcTemplate jdbcTemplate) { this.jdbcTemplate = jdbcTemplate; }
+
+    // Parameterized RowMapper pattern (strictly JdbcTemplate, no JPA/Hibernate)
+    private final RowMapper<User> userRowMapper = (rs, rowNum) -> {
+        User u = new User();
+        u.setId(rs.getLong("user_id")); u.setUsername(rs.getString("username"));
+        u.setPasswordHash(rs.getString("password_hash")); u.setFullName(rs.getString("full_name"));
+        u.setRoleId(rs.getInt("role_id")); u.setActive(rs.getBoolean("is_active"));
+        u.setFailedLoginAttempts(rs.getInt("failed_attempts"));
+        return u;
+    };
+
+    public Optional<User> findByUsernameOrEmail(String val) {
+        String sql = "SELECT u.*, r.role_name FROM users u JOIN roles r ON u.role_id = r.role_id "
+                   + "WHERE u.username = ? OR u.email = ?";
+        return jdbcTemplate.query(sql, userRowMapper, val, val).stream().findFirst();
+    }
+}
+
+// Key SQL Queries across repositories:
+// Auth: UPDATE users SET failed_attempts = failed_attempts + 1 WHERE user_id = ?
+// Perm: SELECT p.permission_name FROM permissions p JOIN role_permissions rp
+//       ON p.permission_id = rp.permission_id WHERE rp.role_id = ?
+// Proj: SELECT * FROM projects WHERE (? IS NULL OR status = ?) ORDER BY project_id DESC
+// Task: SELECT t.*, p.project_name, w.full_name FROM tasks t JOIN projects p USING(project_id)
+// Attn: SELECT a.*, w.full_name FROM attendance a JOIN workers w USING(worker_id)
+// Matl: UPDATE materials SET quantity_on_hand = quantity_on_hand + ? WHERE material_id = ?
+// Eqp:  SELECT e.*, DATEDIFF(e.next_service_due, CURDATE()) AS days_until_due FROM equipment e
+// Safe: INSERT INTO safety_inspections (project_id, inspector_id, overall_score) VALUES (?, ?, ?)
+// Log:  INSERT INTO audit_logs (user_id, action, module, status) VALUES (?, ?, ?, ?)
+
+8. Authentication Service
+package com.csims.service;
+
+@Service
+public class AuthService {
+    private final UserRepository userRepository;
+    private final SystemService systemService;
+    private final PasswordEncoder passwordEncoder;
+
+    public UserDto login(LoginRequest req, HttpServletRequest request) {
+        User user = userRepository.findByUsernameOrEmail(req.getUsername())
+            .orElseThrow(() -> new BadCredentialsException("Invalid username or password"));
+        if (!user.isActive()) throw new DisabledException("Account deactivated.");
+        if (user.getLockedUntil() != null && LocalDateTime.now().isBefore(user.getLockedUntil()))
+            throw new LockedException("Account locked. Try again later.");
+        if (!passwordEncoder.matches(req.getPassword(), user.getPasswordHash())) {
+            userRepository.incrementFailedLogins(user.getId());
+            if (user.getFailedLoginAttempts() + 1 >= 5) {
+                userRepository.lockAccount(user.getId(), LocalDateTime.now().plusMinutes(15));
+                throw new LockedException("Account locked for 15 min due to 5 failed attempts.");
+            }
+            throw new BadCredentialsException("Invalid username or password");
+        }
+        userRepository.resetFailedLoginsAndLock(user.getId());
+        userRepository.updateLastLogin(user.getId());
+        Set<String> perms = userRepository.findPermissionNamesByRoleId(user.getRoleId());
+        SecurityContextHolder.getContext().setAuthentication(
+            new UsernamePasswordAuthenticationToken(new CustomUserDetails(user, perms), null,
+                AuthorityUtils.createAuthorityList(perms.toArray(new String[0]))));
+        request.getSession(true).setAttribute(
+            HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY,
+            SecurityContextHolder.getContext());
+        systemService.log(user.getId(), user.getUsername(), user.getRoleName(), "LOGIN_SUCCESS",
+            "AUTH", "USER", String.valueOf(user.getId()), null, null, "SUCCESS", "Logged in");
+        return toDto(user, perms);
+    }
+
+    public void logout(HttpServletRequest req) {
+        SecurityContextHolder.clearContext();
+        HttpSession session = req.getSession(false);
+        if (session != null) session.invalidate();
+    }
+}
+
+9. User, Role, and Account Request Service
+package com.csims.service;
+
+@Service
+public class AdminService {
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final SystemService systemService;
+
+    @Transactional
+    public Long createUser(User user, String rawPwd, Long operatorId, String operatorUsername) {
+        if (userRepository.existsByUsername(user.getUsername()))
+            throw new ApiException("Username already exists", HttpStatus.CONFLICT);
+        user.setPasswordHash(passwordEncoder.encode(rawPwd));
+        user.setMustChangePassword(true); user.setActive(true);
+        Long id = userRepository.createUser(user);
+        systemService.log(operatorId, operatorUsername, null, "USER_CREATE", "USER", "USER",
+            String.valueOf(id), null, user.getUsername(), "SUCCESS", "Created user");
+        return id;
+    }
+
+    @Transactional
+    public void toggleUserStatus(Long id, boolean active, Long opId, String opUsername) {
+        if (id == 1 && !active)
+            throw new ApiException("Cannot deactivate primary Admin", HttpStatus.BAD_REQUEST);
+        User u = getUserById(id); u.setActive(active); userRepository.updateUser(u);
+    }
+
+    @Transactional
+    public void approveRequest(Long id, Long reviewerId, String reviewerUser, String reviewNotes) {
+        AccountRequest req = getRequestById(id);
+        if (!"PENDING".equalsIgnoreCase(req.getStatus()))
+            throw new ApiException("Request already processed", HttpStatus.BAD_REQUEST);
+        if ("REGISTRATION".equalsIgnoreCase(req.getRequestType())) {
+            User u = new User(); u.setUsername(req.getUsername()); u.setEmail(req.getEmail());
+            u.setFullName(req.getFullName()); u.setRoleId(req.getRequestedRoleId());
+            u.setPasswordHash(passwordEncoder.encode("Welcome@123"));
+            u.setActive(true); u.setMustChangePassword(true);
+            Long userId = userRepository.createUser(u);
+            systemService.notify(userId, "Approved", "Temp pwd: Welcome@123", "SUCCESS", null);
+        }
+        userRepository.updateAccountRequestReview(id, "APPROVED", reviewerId, reviewNotes);
+    }
+}
+
+10. Project, Workforce, and Contractor Service
+package com.csims.service;
+
+@Service
+public class ProjectService {
+    private final ProjectRepository projectRepository;
+    private final SystemService systemService;
+
+    @Transactional
+    public Integer createProject(Project p, Long operatorId, String operatorUsername) {
+        Integer id = projectRepository.create(p);
+        systemService.log(operatorId, operatorUsername, null, "PROJECT_CREATE", "PROJECT",
+            "PROJECT", String.valueOf(id), null, p.getProjectName(), "SUCCESS", "Created project");
+        return id;
+    }
+
+    @Transactional
+    public void updateStatus(Integer id, String newStatus, Long opId, String opUser) {
+        Project p = getProjectById(id);
+        projectRepository.updateStatus(id, newStatus);
+        systemService.log(opId, opUser, null, "PROJECT_STATUS_UPDATE", "PROJECT",
+            "PROJECT", String.valueOf(id), p.getStatus(), newStatus, "SUCCESS", "Status update");
+    }
+
+    @Transactional
+    public void assignWorker(Integer pId, Integer wId, String role, Long opId, String opUser) {
+        projectRepository.assignWorkerToProject(pId, wId, role);
+        systemService.log(opId, opUser, null, "PROJECT_WORKER_ASSIGN", "PROJECT", "WORKER",
+            String.valueOf(wId), null, String.valueOf(pId), "SUCCESS", "Assigned worker");
+    }
+
+    @Transactional public Integer createContractor(Contractor c) {
+        return projectRepository.createContractor(c);
+    }
+    @Transactional public Integer createWorker(Worker w) {
+        return projectRepository.createWorker(w);
+    }
+}
+
+11. Task Management Service
+package com.csims.service;
+
+public class TaskServiceLogic {
+    public List<Task> getAllTasks(Integer projectId, String status, Integer workerId) {
+        return projectRepository.findAllTasks(projectId, status, workerId);
+    }
+
+    @Transactional
+    public Integer createTask(Task t, Long operatorId, String operatorUsername) {
+        Integer id = projectRepository.createTask(t);
+        systemService.log(operatorId, operatorUsername, null, "TASK_CREATE", "TASK", "TASK",
+            String.valueOf(id), null, t.getTitle(), "SUCCESS", "Created task");
+        return id;
+    }
+
+    @Transactional
+    public void updateTaskStatus(Integer id, String status, Integer progressPercent,
+            Long operatorId, String operatorUsername) {
+        Task existing = getTaskById(id);
+        int finalProg = progressPercent != null ? progressPercent : existing.getCompletionPercent();
+        if ("Completed".equalsIgnoreCase(status)) finalProg = 100;
+        projectRepository.updateTaskStatus(id, status, finalProg);
+        systemService.log(operatorId, operatorUsername, null, "TASK_STATUS_UPDATE", "TASK", "TASK",
+            String.valueOf(id), existing.getStatus(), status, "SUCCESS", "Status updated");
+    }
+
+    @Transactional
+    public void assignTaskWorker(Integer id, Integer workerId, Long opId, String opUser) {
+        projectRepository.assignTaskWorker(id, workerId);
+    }
+}
+
+12. Attendance Service
+package com.csims.service;
+
+public class AttendanceServiceLogic {
+    public List<Attendance> getAttendance(Integer projectId, LocalDate date, Integer workerId) {
+        return projectRepository.findAllAttendance(projectId, date, workerId);
+    }
+
+    @Transactional
+    public void recordAttendance(Attendance a, Long operatorId, String operatorUsername) {
+        a.setRecordedBy(operatorId);
+        projectRepository.recordAttendance(a);
+        systemService.log(operatorId, operatorUsername, null, "ATTENDANCE_RECORD", "ATTENDANCE",
+            "ATTENDANCE", String.valueOf(a.getWorkerId()), null, a.getStatus(), "SUCCESS",
+            "Recorded attendance: " + a.getStatus());
+    }
+
+    @Transactional
+    public void correctAttendance(Integer id, String status, String remarks, Long opId, String u) {
+        Attendance existing = getAttendanceById(id);
+        projectRepository.correctAttendance(id, status, remarks, opId);
+        systemService.log(opId, u, null, "ATTENDANCE_CORRECT", "ATTENDANCE", "ATTENDANCE",
+            String.valueOf(id), existing.getStatus(), status, "SUCCESS", "Corrected: " + remarks);
+    }
+}
+
+13. Inventory and Material Stock Service
+package com.csims.service;
+
+@Service
+public class InventoryService {
+    private final InventoryRepository inventoryRepository;
+    private final SystemService systemService;
+
+    @Transactional
+    public void recordReceipt(Integer matId, BigDecimal qty, String ref, String remarks,
+            Long opId, String opUser) {
+        inventoryRepository.adjustStock(matId, qty);
+        InventoryTransaction tx = new InventoryTransaction();
+        tx.setMaterialId(matId); tx.setTransactionType("RECEIPT"); tx.setQuantity(qty);
+        tx.setReferenceNo(ref); tx.setRemarks(remarks); tx.setPerformedBy(opId);
+        inventoryRepository.recordTransaction(tx);
+        systemService.log(opId, opUser, null, "INVENTORY_RECEIPT", "INVENTORY", "MATERIAL",
+            String.valueOf(matId), null, String.valueOf(qty), "SUCCESS", "Stock received");
+    }
+
+    @Transactional
+    public void recordIssue(Integer matId, BigDecimal qty, Integer projId, String ref,
+            String remarks, Long opId, String opUser) {
+        Material m = getMaterialById(matId);
+        // Atomic check: issue fails if stock < quantity -> rollback
+        if (m.getQuantityOnHand().compareTo(qty) < 0) {
+            throw new ApiException("Insufficient stock for " + m.getName() + ". Available: "
+                + m.getQuantityOnHand() + ", Requested: " + qty, HttpStatus.BAD_REQUEST);
+        }
+        inventoryRepository.adjustStock(matId, qty.negate());
+        InventoryTransaction tx = new InventoryTransaction();
+        tx.setMaterialId(matId); tx.setTransactionType("ISSUE"); tx.setQuantity(qty);
+        tx.setProjectId(projId); tx.setReferenceNo(ref); tx.setPerformedBy(opId);
+        inventoryRepository.recordTransaction(tx);
+
+        if (m.getQuantityOnHand().subtract(qty).compareTo(m.getMinStock()) <= 0) {
+            systemService.notify(1L, "Low Stock Warning", "Material " + m.getName()
+                + " reached threshold.", "WARNING", "/inventory");
+        }
+    }
+}
+
+14. Equipment Fleet and Maintenance Service
+package com.csims.service;
+
+public class EquipmentMaintenanceLogic {
+    @Transactional
+    public Integer scheduleMaintenance(MaintenanceRecord m, Long opId, String opUser) {
+        inventoryRepository.updateEquipmentStatus(m.getEquipmentId(), "Maintenance");
+        Integer id = inventoryRepository.createMaintenance(m);
+        systemService.log(opId, opUser, null, "MAINTENANCE_SCHEDULE", "MAINTENANCE",
+            "MAINTENANCE", String.valueOf(id), null, m.getMaintenanceType(), "SUCCESS", "Sched");
+        return id;
+    }
+
+    @Transactional
+    public void updateMaintenance(Integer id, MaintenanceRecord m, Long opId, String opUser) {
+        MaintenanceRecord existing = getMaintenanceById(id);
+        m.setId(id);
+        // On maintenance completion: auto-calculate next service due date in 90 days
+        if ("Completed".equalsIgnoreCase(m.getStatus())) {
+            if (m.getCompletedDate() == null) m.setCompletedDate(LocalDate.now());
+            inventoryRepository.updateEquipmentServiceDates(existing.getEquipmentId(),
+                m.getCompletedDate(), LocalDate.now().plusDays(90));
+        }
+        inventoryRepository.updateMaintenance(m);
+        systemService.log(opId, opUser, null, "MAINTENANCE_UPDATE", "MAINTENANCE",
+            "MAINTENANCE", String.valueOf(id), existing.getStatus(), m.getStatus(), "SUCCESS",
+            "Updated");
+    }
+}
+
+15. Safety Inspection, Violation, and Incident Service
+package com.csims.service;
+
+@Service
+public class SafetyService {
+    private final SafetyRepository safetyRepository;
+    private final SystemService systemService;
+
+    @Transactional
+    public Integer conductInspection(SafetyInspection si, Long inspId, String inspUser) {
+        si.setInspectorId(inspId);
+        double total = si.getPpeScore() + si.getWorkerSafetyScore() + si.getEquipmentScore()
+                     + si.getWorkAreaScore() + si.getEmergencyScore();
+        BigDecimal overall = BigDecimal.valueOf(total / 5.0).setScale(2, RoundingMode.HALF_UP);
+        si.setOverallScore(overall);
+        Integer id = safetyRepository.createInspection(si);
+        if (overall.compareTo(BigDecimal.valueOf(70)) < 0) {
+            systemService.notify(inspId, "Safety Score Alert (< 70%)",
+                "Inspection ID " + id + " scored " + overall + "%. Urgent action required.",
+                "DANGER", "/safety");
+        }
+        return id;
+    }
+
+    @Transactional
+    public Integer reportIncident(Incident inc, Long reporterId, String reporterUsername) {
+        inc.setReportedBy(reporterId);
+        Integer id = safetyRepository.createIncident(inc);
+        if ("FATALITY".equalsIgnoreCase(inc.getSeverity())
+                || "INJURY".equalsIgnoreCase(inc.getSeverity())) {
+            systemService.notify(reporterId, "EMERGENCY: " + inc.getSeverity() + " Reported!",
+                "Accident at project " + inc.getProjectId() + ": " + inc.getTitle(), "DANGER",
+                "/incidents");
+        }
+        return id;
+    }
+}
+
+16. Audit Trail and Notification Service
+package com.csims.service;
+
+@Service
+public class SystemService {
+    private final SystemRepository systemRepository;
+
+    // Append-only audit logging: strictly write and read only (no update or delete)
+    public void log(Long userId, String username, String role, String action, String module,
+                    String entityType, String entityId, String oldValue, String newValue,
+                    String status, String description) {
+        AuditLog log = new AuditLog();
+        log.setUserId(userId); log.setUsername(username != null ? username : "SYSTEM");
+        log.setRole(role); log.setAction(action); log.setModule(module != null ? module : "SYSTEM");
+        log.setEntityType(entityType); log.setEntityId(entityId);
+        log.setOldValue(oldValue); log.setNewValue(newValue);
+        log.setStatus(status != null ? status : "SUCCESS"); log.setDescription(description);
+        systemRepository.saveAuditLog(log);
+    }
+
+    public void notify(Long userId, String title, String message, String type, String link) {
+        Notification n = new Notification();
+        n.setUserId(userId); n.setTitle(title); n.setMessage(message);
+        n.setType(type != null ? type : "INFO"); n.setReadStatus(false); n.setLink(link);
+        systemRepository.saveNotification(n);
+    }
+
+    public List<Notification> getNotificationsForUser(Long id) {
+        return systemRepository.findNotificationsByUserId(id);
+    }
+}
+
+17. Dashboard Metrics and Business Reports Service
+package com.csims.service;
+
+public class DashboardAndReportLogic {
+    public Map<String, Object> getMetrics(String roleName, Long userId) {
+        JdbcTemplate jt = systemRepository.getJdbcTemplate();
+        Map<String, Object> metrics = new HashMap<>();
+        metrics.put("totalProjects", queryInt(jt, "SELECT COUNT(*) FROM projects"));
+        metrics.put("activeProjects", queryInt(jt,
+            "SELECT COUNT(*) FROM projects WHERE status NOT IN ('Completed', 'Archived')"));
+        metrics.put("totalWorkers", queryInt(jt,
+            "SELECT COUNT(*) FROM workers WHERE status = 'ACTIVE'"));
+        metrics.put("inProgressTasks", queryInt(jt,
+            "SELECT COUNT(*) FROM tasks WHERE status = 'In Progress'"));
+        metrics.put("lowStockCount", queryInt(jt,
+            "SELECT COUNT(*) FROM materials WHERE quantity_on_hand <= min_stock"));
+        metrics.put("openViolations", queryInt(jt,
+            "SELECT COUNT(*) FROM safety_violations WHERE status = 'OPEN'"));
+        metrics.put("criticalIncidents", queryInt(jt,
+            "SELECT COUNT(*) FROM incidents WHERE severity IN ('CRITICAL', 'FATALITY', 'INJURY') "
+            + "AND status NOT IN ('Resolved', 'Closed')"));
+        metrics.put("spentBudget", queryDouble(jt,
+            "SELECT IFNULL(SUM(it.quantity * m.unit_price), 0) FROM inventory_transactions it "
+            + "JOIN materials m ON it.material_id = m.material_id "
+            + "WHERE it.transaction_type = 'ISSUE'"));
+        return metrics;
+    }
+
+    public byte[] exportReportToCsv(String type) throws IOException {
+        ReportResultDto report = generateReport(type);
+        return Utils.generateCsv(report.getHeaders(), report.getRows());
+    }
+}
+
+18. REST Controllers and API Endpoint Matrix
+package com.csims.controller;
+
+// Controller Structure Pattern: Method-level RBAC enforcement via @PreAuthorize
+@RestController
+@RequestMapping("/api/projects")
+public class ProjectController {
+    private final ProjectService projectService;
+
+    @PostMapping
+    @PreAuthorize("hasAuthority('PROJECT_CREATE') or hasRole('Administrator')")
+    public ResponseEntity<ApiResponse<Integer>> createProject(@Valid @RequestBody Project p,
+            @AuthenticationPrincipal CustomUserDetails user) {
+        Integer id = projectService.createProject(p, user.getId(), user.getUsername());
+        return ResponseEntity.ok(ApiResponse.success("Project created successfully", id));
+    }
+}
+
+// Complete REST API Endpoint Directory across 6 Controllers:
+// Auth: POST /api/auth/login|logout|change-password|register-request|forgot-password, GET /me
+// User: GET|POST /api/users, GET|PUT /api/users/{id}, PATCH /status, POST /reset-password
+// Role: GET /api/roles, GET /api/roles/permissions, GET|PUT /api/roles/{id}/permissions
+// Req:  GET /api/account-requests, POST /api/account-requests/{id}/approve|reject
+// Proj: GET|POST /api/projects, GET|PUT /api/projects/{id}, PATCH /status|progress, POST /archive
+// Wkfc: GET|POST /api/projects/{id}/workers, GET|POST /api/workforce/workers|contractors
+// Task: GET|POST /api/tasks, GET|PUT /api/tasks/{id}, PATCH /status|assign
+// Attn: GET|POST /api/attendance, PATCH /api/attendance/{id}/correct
+// Inv:  GET|POST /api/inventory, GET|PUT /api/inventory/{id}
+//       POST /api/inventory/receipt|issue, GET /api/inventory/transactions
+// Eqp:  GET|POST /api/equipment, GET|PUT /api/equipment/{id}, PATCH /status
+// Mnt:  GET|POST /api/maintenance, GET|PUT /api/maintenance/{id}
+// Safe: GET|POST /api/safety/inspections|violations, GET|POST /api/incidents
+// Rept: GET /api/reports/list|preview|export/csv, GET /api/dashboard/metrics
+// Sys:  GET /api/notifications, POST /api/notifications/read-all, GET /api/audit-logs
+
+19. Automated Integration Test Suite
+package com.csims;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+public class TestSuiteSummary {
+    // AuthIntegrationTest: verifies unauthenticated challenge and session establishment
+    // void unauthenticatedRequestReturns401() ->
+    //     mockMvc.perform(get("/api/projects")).andExpect(status().isUnauthorized());
+    // void validAdminLoginSucceeds() ->
+    //     mockMvc.perform(post("/api/auth/login")).andExpect(status().isOk());
+
+    // RbacIntegrationTest: verifies method-level security (@PreAuthorize) enforcement across roles
+    // void adminAllowedAuditLogs() ->
+    //     mockMvc.perform(get("/api/audit-logs")).andExpect(status().isOk());
+    // void projectManagerForbiddenAuditLogs() ->
+    //     mockMvc.perform(get("/api/audit-logs")).andExpect(status().isForbidden());
+    // void siteEngineerForbiddenProjectCreation() ->
+    //     mockMvc.perform(post("/api/projects")).andExpect(status().isForbidden());
+    // void workerForbiddenProjectCreation() ->
+    //     mockMvc.perform(post("/api/projects")).andExpect(status().isForbidden());
+
+    // InventoryTransactionTest: verifies transactional atomicity and rollback
+    // void issueExceedingStockThrowsExceptionAndRollsBack() {
+    //     ApiException ex = assertThrows(ApiException.class, () ->
+    //         inventoryService.recordIssue(m.getId(), initialStock.add(BigDecimal.TEN), 1, "REF",
+    //             "Test", 1L, "admin"));
+    //     assertTrue(ex.getMessage().contains("Insufficient stock"));
+    //     assertEquals(0, initialStock.compareTo(
+    //         inventoryService.getMaterialById(m.getId()).getQuantityOnHand()));
+    // }
+    // void validReceiptIncreasesStock() {
+    //     inventoryService.recordReceipt(m.getId(), receiptQuantity, "REF", "Test", 1L, "admin");
+    //     assertEquals(0, initialStock.add(receiptQuantity).compareTo(
+    //         inventoryService.getMaterialById(m.getId()).getQuantityOnHand()));
+    // }
+}
+
+================================================================================================
+SUMMARY TABLE: CONDENSED CODE LISTING
+================================================================================================
+Sec  | Subsystem / File(s) Summarized                          | Original  | Condensed
+-----+---------------------------------------------------------+-----------+----------
+1    | Application Entry Point (CsimsApplication.java)         | 12        | 9
+2    | Security Config & User Details (SecurityConfig, CustomUser...) | 282       | 35
+3    | Domain Models (Models.java - 19 entities)               | 976       | 44
+4    | DTOs & API Response (Dtos.java, ApiResponse.java)       | 341       | 28
+5    | Exceptions & Global Handler (AppExceptions, Handler)    | 116       | 37
+6    | Utilities & CSV Export (Utils.java)                     | 53        | 28
+7    | Repositories & SQL Catalog (5 Repository classes)       | 1792      | 36
+8    | Authentication Service (AuthService.java)               | 221       | 43
+9    | Admin & Identity Service (AdminService.java)            | 198       | 44
+10   | Project & Workforce Service (ProjectService.java - Part 1) | 95        | 38
+11   | Task Management Service (ProjectService.java - Part 2)  | 75        | 32
+12   | Attendance Service (ProjectService.java - Part 3)       | 53        | 25
+13   | Inventory & Stock Service (InventoryService.java - Part 1) | 120       | 41
+14   | Equipment & Fleet Service (InventoryService.java - Part 2) | 80        | 29
+15   | Safety & Incidents Service (SafetyService.java)         | 133       | 37
+16   | Audit & Notifications Service (SystemService.java - Part 1) | 110       | 31
+17   | Dashboard & Reports Service (SystemService.java - Part 2) | 287       | 33
+18   | REST Controllers Matrix (6 Controller classes)          | 972       | 34
+19   | Integration Test Suite (4 Test classes)                 | 384       | 37
+-----+---------------------------------------------------------+-----------+----------
+TOT  | Full Java Backend (31 source and test classes)          | 6300      | 641
+================================================================================================
